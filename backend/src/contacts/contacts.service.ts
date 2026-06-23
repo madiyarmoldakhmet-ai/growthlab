@@ -1,78 +1,100 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma.service';
 import { Contact, ContactImportResult, ContactInput } from './contact.entity';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 
 type RawRow = Record<string, unknown>;
+type ContactRecord = Prisma.ContactGetPayload<Record<string, never>>;
+
+const LEGACY_USER_EMAIL = 'legacy@growthlab.local';
 
 @Injectable()
 export class ContactsService {
-  private readonly contacts = new Map<string, Contact>();
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): Contact[] {
-    return [...this.contacts.values()];
+  async findAll(): Promise<Contact[]> {
+    const userId = await this.getUserScope();
+    const contacts = await this.prisma.contact.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return contacts.map((contact) => this.toEntity(contact));
   }
 
-  findOne(id: string): Contact {
-    const contact = this.contacts.get(id);
+  async findOne(id: string): Promise<Contact> {
+    const userId = await this.getUserScope();
+    const contact = await this.prisma.contact.findFirst({
+      where: { id, userId },
+    });
 
     if (!contact) {
       throw new NotFoundException(`Contact ${id} not found`);
     }
 
-    return contact;
+    return this.toEntity(contact);
   }
 
-  create(dto: CreateContactDto): Contact {
+  async create(dto: CreateContactDto): Promise<Contact> {
+    const userId = await this.getUserScope();
     const input = this.normalizeInput(dto);
-    const duplicate = this.findDuplicate(input);
+    const duplicate = await this.findDuplicate(userId, input);
 
     if (duplicate) {
       throw new BadRequestException('Contact already exists');
     }
 
-    const now = new Date();
-    const contact: Contact = {
-      id: randomUUID(),
-      ...input,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const contact = await this.prisma.contact.create({
+      data: this.toCreateData(userId, input),
+    });
 
-    this.contacts.set(contact.id, contact);
-    return contact;
+    return this.toEntity(contact);
   }
 
-  update(id: string, dto: UpdateContactDto): Contact {
-    const current = this.findOne(id);
+  async update(id: string, dto: UpdateContactDto): Promise<Contact> {
+    const userId = await this.getUserScope();
+    const current = await this.findOne(id);
     const nextInput = this.normalizeInput({ ...current, ...dto });
-    const duplicate = this.findDuplicate(nextInput, id);
+    const duplicate = await this.findDuplicate(userId, nextInput, id);
 
     if (duplicate) {
       throw new BadRequestException('Contact already exists');
     }
 
-    const updated: Contact = {
-      ...current,
-      ...nextInput,
-      updatedAt: new Date(),
-    };
+    const updated = await this.prisma.contact.update({
+      where: { id },
+      data: this.toUpdateData(nextInput),
+    });
 
-    this.contacts.set(id, updated);
-    return updated;
+    return this.toEntity(updated);
   }
 
-  remove(id: string): void {
-    this.findOne(id);
-    this.contacts.delete(id);
+  async remove(id: string): Promise<void> {
+    const userId = await this.getUserScope();
+    const contact = await this.prisma.contact.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+
+    if (!contact) {
+      throw new NotFoundException(`Contact ${id} not found`);
+    }
+
+    await this.prisma.contact.delete({ where: { id } });
   }
 
-  removeDuplicates(): ContactImportResult {
+  async removeDuplicates(): Promise<ContactImportResult> {
+    const userId = await this.getUserScope();
+    const contacts = (await this.prisma.contact.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    })).map((contact) => this.toEntity(contact));
     const unique = new Map<string, Contact>();
     const duplicates: string[] = [];
 
-    for (const contact of this.contacts.values()) {
+    for (const contact of contacts) {
       const key = this.getDeduplicationKey(contact);
 
       if (!key || !unique.has(key)) {
@@ -85,20 +107,22 @@ export class ContactsService {
       duplicates.push(contact.id);
     }
 
-    for (const id of duplicates) {
-      this.contacts.delete(id);
+    if (duplicates.length) {
+      await this.prisma.contact.deleteMany({
+        where: { id: { in: duplicates }, userId },
+      });
     }
 
     return {
       imported: 0,
       skippedDuplicates: duplicates.length,
-      contacts: this.findAll(),
+      contacts: await this.findAll(),
     };
   }
 
-  importCsv(buffer?: Buffer): ContactImportResult {
+  async importCsv(buffer?: Buffer): Promise<ContactImportResult> {
     this.ensureFile(buffer);
-    const rows = this.parseCsv(buffer.toString('utf8'));
+    const rows = this.parseCsv(buffer!.toString('utf8'));
     return this.importRows(rows, 'csv');
   }
 
@@ -120,7 +144,8 @@ export class ContactsService {
     return this.importRows(rows, 'excel');
   }
 
-  private importRows(rows: RawRow[], source: string): ContactImportResult {
+  private async importRows(rows: RawRow[], source: string): Promise<ContactImportResult> {
+    const userId = await this.getUserScope();
     let imported = 0;
     let skippedDuplicates = 0;
     const contacts: Contact[] = [];
@@ -140,12 +165,16 @@ export class ContactsService {
         continue;
       }
 
-      if (this.findDuplicate(input)) {
+      if (await this.findDuplicate(userId, input)) {
         skippedDuplicates += 1;
         continue;
       }
 
-      const contact = this.create(input);
+      const contact = this.toEntity(
+        await this.prisma.contact.create({
+          data: this.toCreateData(userId, input),
+        }),
+      );
       imported += 1;
       contacts.push(contact);
     }
@@ -165,18 +194,29 @@ export class ContactsService {
     };
   }
 
-  private findDuplicate(input: Partial<ContactInput>, exceptId?: string): Contact | undefined {
+  private async findDuplicate(
+    userId: string,
+    input: Partial<ContactInput>,
+    exceptId?: string,
+  ): Promise<Contact | undefined> {
     const inputKey = this.getDeduplicationKey(input);
 
     if (!inputKey) {
       return undefined;
     }
 
-    return this.findAll().find((contact) => {
-      if (contact.id === exceptId) {
-        return false;
-      }
+    const contacts = await this.prisma.contact.findMany({
+      where: {
+        userId,
+        id: exceptId ? { not: exceptId } : undefined,
+        OR: [
+          input.email ? { email: input.email.toLowerCase() } : undefined,
+          input.phone ? { phone: this.normalizePhone(input.phone) } : undefined,
+        ].filter(Boolean) as Prisma.ContactWhereInput[],
+      },
+    });
 
+    return contacts.map((contact) => this.toEntity(contact)).find((contact) => {
       return this.getDeduplicationKey(contact) === inputKey;
     });
   }
@@ -316,5 +356,88 @@ export class ContactsService {
     }
 
     return cleaned.replace(/[^\d+]/g, '');
+  }
+
+  private toCreateData(userId: string, input: ContactInput): Prisma.ContactCreateInput {
+    return {
+      user: { connect: { id: userId } },
+      email: input.email,
+      phone: input.phone,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      company: input.company,
+      metadata: this.toMetadata(input),
+    };
+  }
+
+  private toUpdateData(input: ContactInput): Prisma.ContactUpdateInput {
+    return {
+      email: input.email,
+      phone: input.phone,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      company: input.company,
+      metadata: this.toMetadata(input),
+    };
+  }
+
+  private toEntity(contact: ContactRecord): Contact {
+    const metadata = this.readMetadata(contact.metadata);
+
+    return {
+      id: contact.id,
+      firstName: contact.firstName ?? undefined,
+      lastName: contact.lastName ?? undefined,
+      email: contact.email ?? undefined,
+      phone: contact.phone ?? undefined,
+      company: contact.company ?? undefined,
+      position: metadata.position,
+      source: metadata.source,
+      createdAt: contact.createdAt,
+      updatedAt: contact.updatedAt,
+    };
+  }
+
+  private toMetadata(input: Partial<ContactInput>): Prisma.InputJsonObject | undefined {
+    const metadata: Record<string, string> = {};
+
+    if (input.position) {
+      metadata.position = input.position;
+    }
+
+    if (input.source) {
+      metadata.source = input.source;
+    }
+
+    return Object.keys(metadata).length ? metadata : undefined;
+  }
+
+  private readMetadata(value: Prisma.JsonValue): Pick<Contact, 'position' | 'source'> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+
+    const metadata = value as Record<string, unknown>;
+
+    return {
+      position: this.clean(metadata.position),
+      source: this.clean(metadata.source),
+    };
+  }
+
+  private async getUserScope(): Promise<string> {
+    // TODO: Pass CurrentUser.id from JWT-protected controllers and remove this legacy fallback.
+    const user = await this.prisma.user.upsert({
+      where: { email: LEGACY_USER_EMAIL },
+      update: {},
+      create: {
+        email: LEGACY_USER_EMAIL,
+        passwordHash: 'legacy-local-user',
+        role: 'admin',
+      },
+      select: { id: true },
+    });
+
+    return user.id;
   }
 }

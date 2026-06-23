@@ -9,23 +9,23 @@ export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
   @Post()
-  create(@Body() createCampaignDto: CreateCampaignDto): Campaign {
+  create(@Body() createCampaignDto: CreateCampaignDto): Promise<Campaign> {
     return this.campaignsService.create(createCampaignDto);
   }
 
   @Get()
-  findAll(): Campaign[] {
+  findAll(): Promise<Campaign[]> {
     return this.campaignsService.findAll();
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCampaignDto: UpdateCampaignDto): Campaign {
+  update(@Param('id') id: string, @Body() updateCampaignDto: UpdateCampaignDto): Promise<Campaign> {
     return this.campaignsService.update(id, updateCampaignDto);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string): void {
-    this.campaignsService.remove(id);
+  async remove(@Param('id') id: string): Promise<void> {
+    await this.campaignsService.remove(id);
   }
 }

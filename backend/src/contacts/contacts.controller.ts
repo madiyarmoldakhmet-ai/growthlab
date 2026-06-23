@@ -43,8 +43,8 @@ export class ContactsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    this.contactsService.remove(id);
+  async remove(@Param('id') id: string) {
+    await this.contactsService.remove(id);
     return { deleted: true };
   }
 
