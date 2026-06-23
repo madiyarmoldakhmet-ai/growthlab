@@ -6,17 +6,12 @@ import {
   Param,
   Patch,
   Post,
-  UploadedFile,
-  UseInterceptors,
+  Req,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FastifyRequest } from 'fastify';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { ContactsService } from './contacts.service';
-
-type UploadedContactFile = {
-  buffer: Buffer;
-};
 
 @Controller('contacts')
 export class ContactsController {
@@ -54,14 +49,17 @@ export class ContactsController {
   }
 
   @Post('import/csv')
-  @UseInterceptors(FileInterceptor('file'))
-  importCsv(@UploadedFile() file?: UploadedContactFile) {
-    return this.contactsService.importCsv(file?.buffer);
+  async importCsv(@Req() request: FastifyRequest) {
+    return this.contactsService.importCsv(await this.readUpload(request));
   }
 
   @Post('import/excel')
-  @UseInterceptors(FileInterceptor('file'))
-  importExcel(@UploadedFile() file?: UploadedContactFile) {
-    return this.contactsService.importExcel(file?.buffer);
+  async importExcel(@Req() request: FastifyRequest) {
+    return this.contactsService.importExcel(await this.readUpload(request));
+  }
+
+  private async readUpload(request: FastifyRequest): Promise<Buffer | undefined> {
+    const file = await request.file();
+    return file?.toBuffer();
   }
 }

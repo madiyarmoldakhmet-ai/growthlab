@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { google, gmail_v1 } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
 import { SendGmailDto } from './dto/send-gmail.dto';
 import { SyncGmailRepliesDto } from './dto/sync-gmail-replies.dto';
 import { UpsertGmailOAuthDto } from './dto/upsert-gmail-oauth.dto';
@@ -239,7 +238,7 @@ export class GmailService {
     return google.gmail({ version: 'v1', auth });
   }
 
-  private async getAuthClient(userId: string): Promise<OAuth2Client> {
+  private async getAuthClient(userId: string) {
     const env = this.getEnvConfig();
 
     const client = new google.auth.OAuth2(env.clientId, env.clientSecret, env.redirectUri);

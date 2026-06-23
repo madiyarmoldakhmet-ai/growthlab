@@ -128,20 +128,32 @@ export class ContactsService {
 
   async importExcel(buffer?: Buffer): Promise<ContactImportResult> {
     this.ensureFile(buffer);
-    const xlsx = await this.loadXlsx();
+    const excel = await import('exceljs');
+    const workbook = new excel.Workbook();
 
-    const workbook = xlsx.read(buffer, { type: 'buffer' });
-    const firstSheetName = workbook.SheetNames[0];
+    await workbook.xlsx.load(buffer! as any);
+    const worksheet = workbook.worksheets[0];
 
-    if (!firstSheetName) {
+    if (!worksheet) {
       throw new BadRequestException('Excel file has no sheets');
     }
 
-    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[firstSheetName], {
-      defval: '',
-    }) as RawRow[];
+    const tableRows: string[][] = [];
+    worksheet.eachRow((row) => {
+      const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+      tableRows.push(values.map((value) => this.excelCellToString(value)));
+    });
 
-    return this.importRows(rows, 'excel');
+    const [headers = [], ...rows] = tableRows;
+    const normalizedHeaders = headers.map((header) => header.trim());
+    const records = rows.map((row) =>
+      normalizedHeaders.reduce<RawRow>((acc, header, index) => {
+        acc[header] = row[index] ?? '';
+        return acc;
+      }, {}),
+    );
+
+    return this.importRows(records, 'excel');
   }
 
   private async importRows(rows: RawRow[], source: string): Promise<ContactImportResult> {
@@ -256,15 +268,6 @@ export class ContactsService {
     }
   }
 
-  private async loadXlsx(): Promise<any> {
-    try {
-      const dynamicImport = new Function('moduleName', 'return import(moduleName)');
-      return await dynamicImport('xlsx');
-    } catch {
-      throw new BadRequestException('Excel import requires the xlsx package');
-    }
-  }
-
   private readCsvRows(content: string): string[][] {
     const rows: string[][] = [];
     const delimiter = this.detectDelimiter(content);
@@ -356,6 +359,34 @@ export class ContactsService {
     }
 
     return cleaned.replace(/[^\d+]/g, '');
+  }
+
+  private excelCellToString(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+
+    if (typeof value === 'object') {
+      const cell = value as { text?: unknown; result?: unknown; richText?: { text?: unknown }[] };
+
+      if (cell.text !== undefined) {
+        return String(cell.text);
+      }
+
+      if (cell.result !== undefined) {
+        return String(cell.result);
+      }
+
+      if (Array.isArray(cell.richText)) {
+        return cell.richText.map((part) => String(part.text ?? '')).join('');
+      }
+    }
+
+    return String(value);
   }
 
   private toCreateData(userId: string, input: ContactInput): Prisma.ContactCreateInput {

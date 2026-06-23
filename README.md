@@ -1,142 +1,164 @@
 # GrowthLab
 
-GrowthLab is an outreach workspace for contacts, campaigns, WhatsApp messages, Gmail replies, and AI-assisted lead handling.
+GrowthLab is a local MVP for managing outreach contacts, campaigns, WhatsApp messages, Gmail replies, and AI-assisted lead handling.
 
 GitHub repository: https://github.com/LibDesee/GrowthLab
 
-## Current Project State
+## What Is Ready
 
-- `frontend/` contains a runnable Next.js app with dashboard, contacts, and campaigns screens.
-- `backend/` contains NestJS-style modules, Prisma schema, and migrations, but the backend package scaffold is not present yet.
-- `docs/` contains architecture, API, database, and roadmap notes.
+- `backend/` is a runnable NestJS API.
+- The backend uses Fastify, including multipart uploads through `@fastify/multipart`.
+- `frontend/` is a runnable Next.js app.
+- `backend/prisma/` contains the PostgreSQL schema and initial migration.
+- Contacts and campaigns are persisted through Prisma/PostgreSQL.
+- Gmail, WhatsApp, and AI modules are wired into the backend app.
+- `docs/` contains architecture, API, database, Gmail, and roadmap notes.
 
 ## Requirements
 
 - Node.js 20+
 - npm 10+
-- PostgreSQL 15+ for backend database work
+- PostgreSQL 15+
 - Git
 
-## Environment Variables
+## Environment
 
-### Frontend
+Copy the example files before running locally:
 
-Create `frontend/.env.local` from `frontend/.env.example`:
-
-```bash
-NEXT_PUBLIC_API_URL=http://localhost:3001
+```powershell
+Copy-Item backend\.env.example backend\.env
+Copy-Item frontend\.env.example frontend\.env.local
 ```
 
-`NEXT_PUBLIC_API_URL` is used by `frontend/lib/api.ts`.
+Set real values only in local `.env` files. Do not commit API keys, OAuth client secrets, refresh tokens, access tokens, or downloaded Google credential JSON files.
 
-### Backend
+Important backend variables:
 
-The backend source currently references these variables:
-
-```bash
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/growthlab
-JWT_SECRET=change-me
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/growthlab?schema=public"
+JWT_SECRET="replace-with-a-long-random-secret"
 JWT_EXPIRES_IN_SECONDS=86400
-ADMIN_EMAIL=admin@growthlab.local
-ADMIN_PASSWORD=admin
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4o-mini
-OPENAI_BASE_URL=https://api.openai.com/v1
-WHATSAPP_AUTH_DIR=storage/whatsapp/auth
-GMAIL_CLIENT_ID=
-GMAIL_CLIENT_SECRET=
-GMAIL_REDIRECT_URI=http://localhost:3001/gmail/oauth/callback
+ADMIN_EMAIL="admin@growthlab.local"
+ADMIN_PASSWORD="change-this-password"
+OPENAI_API_KEY=""
+OPENAI_MODEL="gpt-4o-mini"
+OPENAI_BASE_URL="https://api.openai.com/v1"
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+GOOGLE_REDIRECT_URI="http://localhost:3001/gmail/oauth/callback"
+GOOGLE_REFRESH_TOKEN=""
+WHATSAPP_AUTH_DIR="./storage/whatsapp/auth"
+UPLOAD_MAX_BYTES=5242880
 ```
-
-Do not commit real API keys or OAuth secrets.
-
-## Install Dependencies
 
 Frontend:
 
-```bash
-cd frontend
-npm install
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001
 ```
+
+## Install
 
 Backend:
 
-The backend still needs its package scaffold before dependencies can be installed. Once `backend/package.json`, TypeScript config, and a Nest entrypoint are added, install from the backend folder:
-
-```bash
+```powershell
 cd backend
+npm install
+npm run prisma:generate
+```
+
+Frontend:
+
+```powershell
+cd frontend
 npm install
 ```
 
-## Run Frontend
+From the repository root you can also run:
 
-```bash
-cd frontend
-copy .env.example .env.local
-npm run dev
-```
-
-Open http://localhost:3000.
-
-Useful frontend commands:
-
-```bash
+```powershell
 npm run build
-npm run start
-npm run lint
+npm run dev:backend
+npm run dev:frontend
 ```
 
-## Prisma
+## Database
 
-Prisma files live in `backend/prisma`.
+Create a PostgreSQL database named `growthlab`, then run:
 
-After the backend package scaffold is added and dependencies include `prisma` and `@prisma/client`, run:
-
-```bash
+```powershell
 cd backend
-npx prisma generate
-npx prisma migrate dev
+npm run prisma:migrate
 ```
 
 For production-style migration application:
 
-```bash
+```powershell
 npx prisma migrate deploy
 ```
 
-## Run Backend
+The current contacts/campaigns controllers use a temporary local user scope (`legacy@growthlab.local`) until JWT user scoping is passed through those controllers.
 
-The backend launch command depends on the missing backend package scaffold. The intended local flow is:
+## Run
 
-```bash
+Backend:
+
+```powershell
 cd backend
-copy .env.example .env
-npm install
-npx prisma generate
-npx prisma migrate dev
 npm run start:dev
 ```
 
-Before this works, add the backend runtime files and scripts, for example:
+The API runs on http://localhost:3001.
 
-- `backend/package.json`
-- `backend/tsconfig.json`
-- `backend/nest-cli.json`
-- `backend/src/main.ts`
-- root `AppModule` wiring the existing modules
+Frontend:
 
-## Documentation
+```powershell
+cd frontend
+npm run dev
+```
 
-- `docs/ARCHITECTURE.md` - target architecture and module boundaries.
-- `docs/API.md` - target HTTP API shape.
-- `docs/DATABASE.md` - database model and migration notes.
-- `docs/ROADMAP.md` - delivery phases and MVP scope.
+The app runs on http://localhost:3000.
 
-## First-Time Developer Checklist
+## Checks
 
-1. Clone the repository.
-2. Install frontend dependencies with `cd frontend && npm install`.
-3. Create `frontend/.env.local` from `frontend/.env.example`.
-4. Run `npm run dev` from `frontend`.
-5. Review backend scaffold gaps in this README before trying to start the API.
-6. Configure PostgreSQL and `DATABASE_URL` before running Prisma.
+Backend:
+
+```powershell
+cd backend
+npm run build
+npm run prisma:generate
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm run build
+npm run lint
+```
+
+## Main Endpoints
+
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/admin`
+- `GET /contacts`
+- `POST /contacts`
+- `POST /contacts/import/csv`
+- `POST /contacts/import/excel`
+- `GET /campaigns`
+- `POST /campaigns`
+- `POST /whatsapp/connect`
+- `GET /whatsapp/status`
+- `POST /whatsapp/messages`
+- `PUT /gmail/oauth`
+- `POST /gmail/send`
+- `POST /gmail/sync-replies`
+
+## Notes
+
+- Gmail setup details are in `docs/GMAIL.md`.
+- The frontend screens currently use local UI state and sample data; backend API integration can be added on top of `frontend/lib/api.ts`.
+- WhatsApp auth files are written under `WHATSAPP_AUTH_DIR` and must not be committed.
+- Upload endpoints expect `multipart/form-data` with a `file` field.
+- Real secrets should be rotated if they were ever pasted into chat or logs.
