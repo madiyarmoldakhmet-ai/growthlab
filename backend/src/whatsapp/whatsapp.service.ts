@@ -89,7 +89,7 @@ export class WhatsappService implements OnModuleDestroy {
     }
 
     return {
-      id: message?.key?.id,
+      id: message?.key?.id ?? undefined,
       chatId,
       status: 'sent',
     };
@@ -215,7 +215,7 @@ export class WhatsappService implements OnModuleDestroy {
       message.message?.extendedTextMessage?.text ??
       message.message?.imageMessage?.caption ??
       message.message?.videoMessage?.caption
-    );
+    ) ?? undefined;
   }
 
   private toChatId(to: string): string {

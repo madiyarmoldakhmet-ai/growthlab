@@ -147,8 +147,8 @@ export class GmailService {
 
       return {
         id: message.id,
-        gmailMessageId: sent.data.id,
-        threadId: sent.data.threadId,
+        gmailMessageId: sent.data.id ?? undefined,
+        threadId: sent.data.threadId ?? undefined,
         status: 'sent',
         sentAt,
       };
@@ -398,7 +398,7 @@ export class GmailService {
         item.name?.toLowerCase() === name.toLowerCase(),
     );
 
-    return header?.value;
+    return header?.value ?? undefined;
   }
 
   private gmailInternalDate(message: gmail_v1.Schema$Message) {
