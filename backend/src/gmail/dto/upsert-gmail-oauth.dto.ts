@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class UpsertGmailOAuthDto {
   @IsUUID()
@@ -6,25 +6,11 @@ export class UpsertGmailOAuthDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(1)
-  clientId?: string;
+  @IsEmail()
+  authorizedEmail?: string;
 
   @IsOptional()
   @IsString()
-  @MinLength(1)
-  clientSecret?: string;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  redirectUri?: string;
-
-  @IsString()
-  @MinLength(1)
-  refreshToken!: string;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  accessToken?: string;
+  @MaxLength(500)
+  note?: string;
 }

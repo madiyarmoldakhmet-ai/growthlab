@@ -21,7 +21,28 @@ const OAUTH_SETTING_KEY = 'gmail.oauth';
 const MESSAGE_SETTING_PREFIX = 'gmail.message.';
 const DEFAULT_REPLY_QUERY = 'in:inbox newer_than:30d';
 
-interface GmailOAuthSetting {
+interface GmailOAuthMarker {
+  configuredAt?: string;
+  authorizedEmail?: string;
+  note?: string;
+}
+
+interface GmailEnvConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri?: string;
+  refreshToken: string;
+}
+
+interface GoogleApiErrorLike {
+  code?: number;
+  status?: number;
+  response?: {
+    status?: number;
+  };
+}
+
+interface LegacyGmailOAuthSetting {
   clientId?: string;
   clientSecret?: string;
   redirectUri?: string;
@@ -44,14 +65,12 @@ export class GmailService {
   constructor(private readonly prisma: GmailPrismaService) {}
 
   async upsertOAuth(dto: UpsertGmailOAuthDto): Promise<GmailStatus> {
-    const current = await this.getOAuthSetting(dto.userId);
-    const next: GmailOAuthSetting = {
-      ...current,
-      clientId: dto.clientId ?? current.clientId,
-      clientSecret: dto.clientSecret ?? current.clientSecret,
-      redirectUri: dto.redirectUri ?? current.redirectUri,
-      refreshToken: dto.refreshToken,
-      accessToken: dto.accessToken ?? current.accessToken,
+    this.getEnvConfig();
+
+    const next: GmailOAuthMarker = {
+      configuredAt: new Date().toISOString(),
+      authorizedEmail: dto.authorizedEmail,
+      note: dto.note,
     };
 
     await this.prisma.setting.upsert({
@@ -64,13 +83,16 @@ export class GmailService {
   }
 
   async getStatus(userId: string): Promise<GmailStatus> {
-    const setting = await this.getOAuthSetting(userId);
+    const configured = this.isEnvConfigured();
+    const marker = await this.getOAuthMarker(userId);
 
     return {
-      configured: Boolean(setting.refreshToken),
+      configured,
       userId,
-      hasRefreshToken: Boolean(setting.refreshToken),
-      hasAccessToken: Boolean(setting.accessToken),
+      hasRefreshToken: configured,
+      hasAccessToken: false,
+      authorizedEmail: marker.authorizedEmail,
+      source: configured ? 'env' : 'missing_env',
     };
   }
 
@@ -141,71 +163,75 @@ export class GmailService {
   }
 
   async syncReplies(dto: SyncGmailRepliesDto): Promise<GmailReplySyncResult> {
-    const gmail = await this.getGmailClient(dto.userId);
-    const response = await gmail.users.messages.list({
-      userId: 'me',
-      q: dto.query ?? DEFAULT_REPLY_QUERY,
-      maxResults: dto.maxResults ?? 25,
-    });
-    const messages = response.data.messages ?? [];
-    let created = 0;
-    let skipped = 0;
-
-    for (const item of messages) {
-      if (!item.id) {
-        skipped += 1;
-        continue;
-      }
-
-      const full = await gmail.users.messages.get({
+    try {
+      const gmail = await this.getGmailClient(dto.userId);
+      const response = await gmail.users.messages.list({
         userId: 'me',
-        id: item.id,
-        format: 'full',
+        q: dto.query ?? DEFAULT_REPLY_QUERY,
+        maxResults: dto.maxResults ?? 25,
       });
-      const stored = await this.findOriginalMessage(dto.userId, full.data);
+      const messages = response.data.messages ?? [];
+      let created = 0;
+      let skipped = 0;
 
-      if (!stored) {
-        skipped += 1;
-        continue;
+      for (const item of messages) {
+        if (!item.id) {
+          skipped += 1;
+          continue;
+        }
+
+        const full = await gmail.users.messages.get({
+          userId: 'me',
+          id: item.id,
+          format: 'full',
+        });
+        const stored = await this.findOriginalMessage(dto.userId, full.data);
+
+        if (!stored) {
+          skipped += 1;
+          continue;
+        }
+
+        const exists = await this.responseExists(item.id);
+        if (exists) {
+          skipped += 1;
+          continue;
+        }
+
+        const original = await this.prisma.message.findUnique({
+          where: { id: stored.messageId },
+        });
+        if (!original) {
+          skipped += 1;
+          continue;
+        }
+
+        await this.prisma.response.create({
+          data: {
+            messageId: original.id,
+            contactId: original.contactId,
+            campaignId: original.campaignId,
+            body: this.extractBody(full.data),
+            metadata: this.toJsonObject({
+              gmailMessageId: item.id,
+              threadId: full.data.threadId,
+              subject: this.header(full.data, 'subject'),
+              from: this.header(full.data, 'from'),
+              receivedAt: this.gmailInternalDate(full.data),
+            }),
+          },
+        });
+        await this.prisma.message.update({
+          where: { id: original.id },
+          data: { status: 'delivered' },
+        });
+        created += 1;
       }
 
-      const exists = await this.responseExists(item.id);
-      if (exists) {
-        skipped += 1;
-        continue;
-      }
-
-      const original = await this.prisma.message.findUnique({
-        where: { id: stored.messageId },
-      });
-      if (!original) {
-        skipped += 1;
-        continue;
-      }
-
-      await this.prisma.response.create({
-        data: {
-          messageId: original.id,
-          contactId: original.contactId,
-          campaignId: original.campaignId,
-          body: this.extractBody(full.data),
-          metadata: this.toJsonObject({
-            gmailMessageId: item.id,
-            threadId: full.data.threadId,
-            subject: this.header(full.data, 'subject'),
-            from: this.header(full.data, 'from'),
-            receivedAt: this.gmailInternalDate(full.data),
-          }),
-        },
-      });
-      await this.prisma.message.update({
-        where: { id: original.id },
-        data: { status: 'delivered' },
-      });
-      created += 1;
+      return { scanned: messages.length, created, skipped };
+    } catch (error) {
+      throw this.toGmailError(error);
     }
-
-    return { scanned: messages.length, created, skipped };
   }
 
   private async getGmailClient(userId: string) {
@@ -214,30 +240,28 @@ export class GmailService {
   }
 
   private async getAuthClient(userId: string): Promise<OAuth2Client> {
-    const setting = await this.getOAuthSetting(userId);
-    const clientId = setting.clientId ?? process.env.GMAIL_CLIENT_ID;
-    const clientSecret = setting.clientSecret ?? process.env.GMAIL_CLIENT_SECRET;
-    const redirectUri = setting.redirectUri ?? process.env.GMAIL_REDIRECT_URI;
+    const env = this.getEnvConfig();
 
-    if (!setting.refreshToken || !clientId || !clientSecret) {
-      throw new BadRequestException('Gmail OAuth is not configured for this user');
-    }
-
-    const client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const client = new google.auth.OAuth2(env.clientId, env.clientSecret, env.redirectUri);
     client.setCredentials({
-      refresh_token: setting.refreshToken,
-      access_token: setting.accessToken,
+      refresh_token: env.refreshToken,
     });
 
     return client;
   }
 
-  private async getOAuthSetting(userId: string): Promise<GmailOAuthSetting> {
+  private async getOAuthMarker(userId: string): Promise<Partial<GmailOAuthMarker>> {
     const setting = await this.prisma.setting.findUnique({
       where: { userId_key: { userId, key: OAUTH_SETTING_KEY } },
     });
 
-    return this.asObject<GmailOAuthSetting>(setting?.value);
+    const value = this.asObject<GmailOAuthMarker & LegacyGmailOAuthSetting>(setting?.value);
+
+    return {
+      configuredAt: value.configuredAt,
+      authorizedEmail: value.authorizedEmail,
+      note: value.note,
+    };
   }
 
   private async storeGmailMessage(userId: string, value: StoredGmailMessage) {
@@ -406,8 +430,43 @@ export class GmailService {
       return error;
     }
 
-    const message = error instanceof Error ? error.message : 'Gmail request failed';
-    return new ServiceUnavailableException(message);
+    const status = this.googleErrorStatus(error);
+    const reason = status ? `Google API request failed with status ${status}` : 'Google API request failed';
+
+    return new ServiceUnavailableException({
+      code: 'gmail_provider_unavailable',
+      message: reason,
+    });
+  }
+
+  private getEnvConfig(): GmailEnvConfig {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new BadRequestException({
+        code: 'gmail_oauth_not_configured',
+        message:
+          'Gmail OAuth is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN.',
+      });
+    }
+
+    return { clientId, clientSecret, redirectUri, refreshToken };
+  }
+
+  private isEnvConfigured() {
+    return Boolean(
+      process.env.GOOGLE_CLIENT_ID &&
+        process.env.GOOGLE_CLIENT_SECRET &&
+        process.env.GOOGLE_REFRESH_TOKEN,
+    );
+  }
+
+  private googleErrorStatus(error: unknown) {
+    const googleError = error as GoogleApiErrorLike;
+    return googleError.response?.status ?? googleError.status ?? googleError.code;
   }
 
   private isStoredGmailMessage(value: Partial<StoredGmailMessage>): value is StoredGmailMessage {

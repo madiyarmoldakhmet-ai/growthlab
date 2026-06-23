@@ -19,4 +19,6 @@ export interface GmailStatus {
   userId: string;
   hasRefreshToken: boolean;
   hasAccessToken: boolean;
+  authorizedEmail?: string;
+  source: 'env' | 'missing_env';
 }
