@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  admin
+  member
+}
+
+enum CampaignStatus {
+  draft
+  active
+  paused
+  completed
+  archived
+}
+
+enum MessageStatus {
+  queued
+  sent
+  delivered
+  failed
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  name         String?
+  role         UserRole   @default(member)
+  contacts     Contact[]
+  campaigns    Campaign[]
+  messages     Message[]
+  settings     Setting[]
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Contact {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String     @map("user_id") @db.Uuid
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email       String?
+  phone       String?
+  firstName   String?    @map("first_name")
+  lastName    String?    @map("last_name")
+  company     String?
+  metadata    Json?
+  messages    Message[]
+  responses   Response[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([email])
+  @@map("contacts")
+}
+
+model Campaign {
+  id          String         @id @default(uuid()) @db.Uuid
+  userId      String         @map("user_id") @db.Uuid
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  status      CampaignStatus @default(draft)
+  startsAt    DateTime?      @map("starts_at")
+  endsAt      DateTime?      @map("ends_at")
+  messages    Message[]
+  responses   Response[]
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([status])
+  @@map("campaigns")
+}
+
+model Message {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  campaignId  String?       @map("campaign_id") @db.Uuid
+  contactId   String?       @map("contact_id") @db.Uuid
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign    Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  contact     Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  channel     String
+  subject     String?
+  body        String
+  status      MessageStatus @default(queued)
+  scheduledAt DateTime?     @map("scheduled_at")
+  sentAt      DateTime?     @map("sent_at")
+  responses   Response[]
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([contactId])
+  @@index([status])
+  @@map("messages")
+}
+
+model Response {
+  id         String    @id @default(uuid()) @db.Uuid
+  messageId  String    @map("message_id") @db.Uuid
+  contactId  String?   @map("contact_id") @db.Uuid
+  campaignId String?   @map("campaign_id") @db.Uuid
+  message    Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  contact    Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  body       String
+  metadata   Json?
+  receivedAt DateTime  @default(now()) @map("received_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([messageId])
+  @@index([contactId])
+  @@index([campaignId])
+  @@map("responses")
+}
+
+model Setting {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, key])
+  @@index([key])
+  @@map("settings")
+}
