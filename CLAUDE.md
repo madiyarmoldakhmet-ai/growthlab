@@ -25,6 +25,26 @@ docs/      ARCHITECTURE, DATABASE, API, GMAIL, ROADMAP, pitch/
 ```
 Backend-модули: `auth`, `contacts`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
 
+## Доменная модель (Ф1)
+Всё tenant-scoped по `organizationId`. Сущности:
+- **Lead** — холодный лид пайплайна (источник, статус, `verificationStatus`, demo/won/lost timestamps). Дедуп `@@unique([organizationId, email])`.
+- **Contact** — ручной/CRM-контакт (legacy, используется contacts-модулем и Gmail). Пайплайн использует Lead.
+- **Channel** — отправляющая идентичность (ящик/бот): `type`, `dailyLimit`, `isActive` (ротация/лимиты — Ф5).
+- **Campaign** — `goal/channel/audience/dates`; аудитория через **CampaignLead** (join).
+- **Message** — исходящее. Идемпотентность: `@@unique([organizationId, idempotencyKey])` (per-attempt) + `@@unique([campaignId, leadId, step])` (audience-level). `providerMessageId` unique. `unsubscribeToken` unique. Индекс планировщика `[organizationId, status, scheduledAt]`.
+- **Event** — append-only воронка/аудит. Дедуп вебхуков `@@unique([organizationId, provider, providerEventId])`. EventType покрывает sent→delivered→opened→replied→positive→demo→won + hard/soft bounce, complaint, unsubscribe.
+- **Response** — входящий ответ + AI-классификация (`sentiment/aiScore/aiCategory`) — основа replied→positive.
+- **SuppressionEntry** — channel-agnostic `address`, unique `[organizationId, channelType, address]` (suppression-гейт перед отправкой).
+- **Consent** — opt-in для TG/WhatsApp (rule 7), unique `[organizationId, channelType, address]`.
+
+### Контракты на уровне сервисов (НЕ в БД — соблюдать в коде фаз)
+- **Кросс-тенант целостность связей** (campaign.org == lead.org и т.п.) — проверять в сервисе через `AuthScope`; composite-FK в БД намеренно не вводили.
+- **Нормализация email** (trim+lowercase) перед записью/поиском Lead/Suppression — иначе suppression промахнётся по регистру.
+- **SuppressionEntry — единственный авторитетный гейт** перед отправкой; `LeadStatus.suppressed` — производное.
+- **Монотонные статусы Message** (только вперёд) — в sending/webhook сервисе (Ф5).
+- **idempotencyKey** пайплайн ставит всегда (в БД nullable для ручных Gmail-отправок).
+- Дедуп лидов без email (по phone) — на уровне сервиса в Ф2.
+
 ## Команды (backend/)
 ```bash
 npm install && npm run prisma:generate   # установка + клиент Prisma

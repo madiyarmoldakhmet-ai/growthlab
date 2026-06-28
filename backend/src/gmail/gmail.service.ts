@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { google, gmail_v1 } from 'googleapis';
+import { PrismaService } from '../prisma.service';
 import { SendGmailDto } from './dto/send-gmail.dto';
 import { SyncGmailRepliesDto } from './dto/sync-gmail-replies.dto';
 import { UpsertGmailOAuthDto } from './dto/upsert-gmail-oauth.dto';
@@ -13,7 +14,6 @@ import {
   GmailSendResult,
   GmailStatus,
 } from './entities/gmail-message.entity';
-import { PrismaService } from '../prisma.service';
 
 const GMAIL_CHANNEL = 'gmail';
 const OAUTH_SETTING_KEY = 'gmail.oauth';
@@ -65,6 +65,7 @@ export class GmailService {
 
   async upsertOAuth(dto: UpsertGmailOAuthDto): Promise<GmailStatus> {
     this.getEnvConfig();
+    const organizationId = await this.resolveOrganizationId(dto.userId);
 
     const next: GmailOAuthMarker = {
       configuredAt: new Date().toISOString(),
@@ -73,8 +74,8 @@ export class GmailService {
     };
 
     await this.prisma.setting.upsert({
-      where: { userId_key: { userId: dto.userId, key: OAUTH_SETTING_KEY } },
-      create: { userId: dto.userId, key: OAUTH_SETTING_KEY, value: this.toJsonObject(next) },
+      where: { organizationId_key: { organizationId, key: OAUTH_SETTING_KEY } },
+      create: { organizationId, key: OAUTH_SETTING_KEY, value: this.toJsonObject(next) },
       update: { value: this.toJsonObject(next) },
     });
 
@@ -83,7 +84,8 @@ export class GmailService {
 
   async getStatus(userId: string): Promise<GmailStatus> {
     const configured = this.isEnvConfigured();
-    const marker = await this.getOAuthMarker(userId);
+    const organizationId = await this.resolveOrganizationId(userId);
+    const marker = await this.getOAuthMarker(organizationId);
 
     return {
       configured,
@@ -96,8 +98,10 @@ export class GmailService {
   }
 
   async send(dto: SendGmailDto): Promise<GmailSendResult> {
+    const organizationId = await this.resolveOrganizationId(dto.userId);
     const message = await this.prisma.message.create({
       data: {
+        organizationId,
         userId: dto.userId,
         campaignId: dto.campaignId,
         contactId: dto.contactId,
@@ -109,7 +113,7 @@ export class GmailService {
     });
 
     try {
-      const gmail = await this.getGmailClient(dto.userId);
+      const gmail = await this.getGmailClient();
       const profile = await gmail.users.getProfile({ userId: 'me' });
       const rfcMessageId = `<growthlab-${message.id}@gmail.growthlab.local>`;
       const raw = this.createRawEmail({
@@ -134,7 +138,7 @@ export class GmailService {
         data: { status: 'sent', sentAt },
       });
 
-      await this.storeGmailMessage(dto.userId, {
+      await this.storeGmailMessage(organizationId, {
         messageId: message.id,
         gmailMessageId: sent.data.id ?? null,
         threadId: sent.data.threadId ?? null,
@@ -162,8 +166,9 @@ export class GmailService {
   }
 
   async syncReplies(dto: SyncGmailRepliesDto): Promise<GmailReplySyncResult> {
+    const organizationId = await this.resolveOrganizationId(dto.userId);
     try {
-      const gmail = await this.getGmailClient(dto.userId);
+      const gmail = await this.getGmailClient();
       const response = await gmail.users.messages.list({
         userId: 'me',
         q: dto.query ?? DEFAULT_REPLY_QUERY,
@@ -184,21 +189,21 @@ export class GmailService {
           id: item.id,
           format: 'full',
         });
-        const stored = await this.findOriginalMessage(dto.userId, full.data);
+        const stored = await this.findOriginalMessage(organizationId, full.data);
 
         if (!stored) {
           skipped += 1;
           continue;
         }
 
-        const exists = await this.responseExists(item.id);
+        const exists = await this.responseExists(organizationId, item.id);
         if (exists) {
           skipped += 1;
           continue;
         }
 
-        const original = await this.prisma.message.findUnique({
-          where: { id: stored.messageId },
+        const original = await this.prisma.message.findFirst({
+          where: { id: stored.messageId, organizationId },
         });
         if (!original) {
           skipped += 1;
@@ -207,8 +212,10 @@ export class GmailService {
 
         await this.prisma.response.create({
           data: {
+            organizationId: original.organizationId,
             messageId: original.id,
             contactId: original.contactId,
+            leadId: original.leadId,
             campaignId: original.campaignId,
             body: this.extractBody(full.data),
             metadata: this.toJsonObject({
@@ -233,12 +240,28 @@ export class GmailService {
     }
   }
 
-  private async getGmailClient(userId: string) {
-    const auth = await this.getAuthClient(userId);
+  private async resolveOrganizationId(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { organizationId: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException({
+        code: 'user_not_found',
+        message: 'User not found for the provided userId.',
+      });
+    }
+
+    return user.organizationId;
+  }
+
+  private async getGmailClient() {
+    const auth = this.getAuthClient();
     return google.gmail({ version: 'v1', auth });
   }
 
-  private async getAuthClient(userId: string) {
+  private getAuthClient() {
     const env = this.getEnvConfig();
 
     const client = new google.auth.OAuth2(env.clientId, env.clientSecret, env.redirectUri);
@@ -249,9 +272,9 @@ export class GmailService {
     return client;
   }
 
-  private async getOAuthMarker(userId: string): Promise<Partial<GmailOAuthMarker>> {
+  private async getOAuthMarker(organizationId: string): Promise<Partial<GmailOAuthMarker>> {
     const setting = await this.prisma.setting.findUnique({
-      where: { userId_key: { userId, key: OAUTH_SETTING_KEY } },
+      where: { organizationId_key: { organizationId, key: OAUTH_SETTING_KEY } },
     });
 
     const value = this.asObject<GmailOAuthMarker & LegacyGmailOAuthSetting>(setting?.value);
@@ -263,22 +286,22 @@ export class GmailService {
     };
   }
 
-  private async storeGmailMessage(userId: string, value: StoredGmailMessage) {
+  private async storeGmailMessage(organizationId: string, value: StoredGmailMessage) {
     const key = `${MESSAGE_SETTING_PREFIX}${value.messageId}`;
     await this.prisma.setting.upsert({
-      where: { userId_key: { userId, key } },
-      create: { userId, key, value: this.toJsonObject(value) },
+      where: { organizationId_key: { organizationId, key } },
+      create: { organizationId, key, value: this.toJsonObject(value) },
       update: { value: this.toJsonObject(value) },
     });
   }
 
-  private async findOriginalMessage(userId: string, message: gmail_v1.Schema$Message) {
+  private async findOriginalMessage(organizationId: string, message: gmail_v1.Schema$Message) {
     const inReplyTo = this.header(message, 'in-reply-to');
     const references = this.header(message, 'references');
     const threadId = message.threadId;
     const settings = await this.prisma.setting.findMany({
       where: {
-        userId,
+        organizationId,
         key: { startsWith: MESSAGE_SETTING_PREFIX },
       },
     });
@@ -300,9 +323,10 @@ export class GmailService {
     return undefined;
   }
 
-  private async responseExists(gmailMessageId: string) {
+  private async responseExists(organizationId: string, gmailMessageId: string) {
     const response = await this.prisma.response.findFirst({
       where: {
+        organizationId,
         metadata: {
           path: ['gmailMessageId'],
           equals: gmailMessageId,

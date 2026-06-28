@@ -17,12 +17,13 @@
 - [x] ESLint flat config для backend (`npm run lint`).
 - **Exit:** ✅ собирается, тесты зелёные, lint без ошибок; контакты/кампании изолированы по организации; миграцию применяет владелец (`npm run prisma:migrate`).
 
-## Ф1 — Доменные модели + миграции
+## Ф1 — Доменные модели + миграции ✅
 Цель: схема под весь пайплайн.
-- [ ] Модели/поля: `Lead`/`Contact` (статус валидности, источник), `Campaign` (goal/channel/audience/dates), `Message` (идемпотентный ключ, provider id), `Channel`, `Event` (этапы воронки), `SuppressionEntry`.
-- [ ] `campaign_contacts` (состав аудитории), `message_events`/`Event` (append-only аудит).
-- [ ] Миграции Prisma + индексы по `organizationId` и фильтрам.
-- **Exit:** `prisma migrate` проходит, модели покрывают воронку из `docs/pitch/README.md`.
+- [x] Модели: `Lead`, `Channel`, `Campaign`(+goal/channel/audience/dates), `Message`(+идемпотентность/provider/step/unsubscribeToken), `CampaignLead`, `Event`(воронка), `Response`(+AI sentiment), `SuppressionEntry`, `Consent`.
+- [x] `Message`/`Setting`/`Response` переведены на `organizationId`.
+- [x] Связи + индексы (планировщик `[org,status,scheduledAt]`, аналитика `[campaign,type,occurredAt]`); дедуп вебхуков и идемпотентность через unique-констрейнты.
+- [x] Миграция `20260628010000_domain_models` создана и **применена к Neon** (`migrate deploy`); схема прошла адверсариальное ревью (41 находка, blocker'ы устранены).
+- **Exit:** ✅ migrate применён, 6 новых таблиц в БД, build+11 тестов+lint зелёные. Модель покрывает воронку `docs/pitch/README.md`.
 
 ## Ф2 — Лидогенерация (leads)
 Цель: наполнять базу лидов.
