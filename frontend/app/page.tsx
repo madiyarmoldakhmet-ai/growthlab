@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const links = [
+  { href: "/demo", label: "▶ Демо для клиента", description: "Презентация за 3–5 минут (сценарий, постановочные данные)." },
   { href: "/dashboard", label: "Dashboard", description: "Overview metrics and campaign health." },
   { href: "/contacts", label: "Contacts", description: "Search, filter, and import contact CSV files." },
   { href: "/campaigns", label: "Campaigns", description: "Track campaign status, budgets, and leads." },
