@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MockScreen } from "../../../components/MockScreen";
 import { StatusPill } from "../../../components/StatusPill";
 import styles from "../../../components/ui.module.css";
@@ -12,7 +13,8 @@ export default function ContactsPage() {
       title="Контакты"
       subtitle="База лидов: каналы связи, статус, оценка качества."
       load={() => MOCK_CONTACTS}
-      emptyText="Контактов нет. Импортируйте CSV или добавьте вручную (форма — в Блоке 3)."
+      emptyText="Контактов нет. Импортируйте CSV или добавьте вручную."
+      action={<Link href="/contacts/new" className={styles.headBtn}>+ Добавить контакты</Link>}
     >
       {(rows) => (
         <table className={styles.table}>

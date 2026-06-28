@@ -319,3 +319,113 @@
   font-size: 18px;
   font-weight: 800;
 }
+
+/* ── Forms ── */
+.form {
+  display: grid;
+  gap: 16px;
+  max-width: 560px;
+}
+
+.formGrid2 {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #3b4658;
+}
+
+.req {
+  color: #c4302b;
+  margin-left: 2px;
+}
+
+.input,
+.textarea,
+.select {
+  border: 1px solid #cdd6e4;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: #ffffff;
+  color: #172033;
+  width: 100%;
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  outline: none;
+  border-color: #2d6cdf;
+  box-shadow: 0 0 0 3px #e6efff;
+}
+
+.inputError {
+  border-color: #e0908c;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.5;
+}
+
+.hint {
+  font-size: 12px;
+  color: #8a94a6;
+}
+
+.errorText {
+  font-size: 12px;
+  color: #c4302b;
+}
+
+.saved {
+  background: #e2f5ef;
+  border: 1px solid #bfe3d3;
+  color: #0d6a48;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.headBtn {
+  border-radius: 8px;
+  border: 1px solid #2d6cdf;
+  background: #2d6cdf;
+  color: #ffffff;
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.calloutInfo {
+  background: #e6efff;
+  border: 1px solid #c4d6f5;
+  color: #1f4f9e;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.calloutWarn {
+  background: #fff4d6;
+  border: 1px solid #f1d98a;
+  color: #8a5d00;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}

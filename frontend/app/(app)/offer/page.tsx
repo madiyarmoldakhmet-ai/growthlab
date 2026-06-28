@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MockScreen } from "../../../components/MockScreen";
 import styles from "../../../components/ui.module.css";
 import { MOCK_OFFERS } from "../../../lib/mock/data";
@@ -19,7 +20,8 @@ export default function OfferPage() {
       title="Оффер"
       subtitle="Что продаём, кому, по какой цене и какой следующий шаг."
       load={() => MOCK_OFFERS}
-      emptyText="Оффер ещё не задан (форма — в Блоке 3)."
+      emptyText="Оффер ещё не задан."
+      action={<Link href="/offer/edit" className={styles.headBtn}>Редактировать оффер</Link>}
     >
       {(rows) => (
         <div className={styles.cardGrid}>

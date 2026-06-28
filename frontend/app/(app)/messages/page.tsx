@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { MockScreen } from "../../../components/MockScreen";
 import styles from "../../../components/ui.module.css";
 import { MOCK_MESSAGES } from "../../../lib/mock/data";
@@ -62,7 +63,8 @@ export default function MessagesPage() {
       title="Сообщения"
       subtitle="Версии писем и предпросмотр Gmail / WhatsApp перед отправкой."
       load={() => MOCK_MESSAGES}
-      emptyText="Сообщений нет. Создайте первое (форма — в Блоке 3)."
+      emptyText="Сообщений нет. Создайте первое."
+      action={<Link href="/messages/new" className={styles.headBtn}>+ Новое сообщение</Link>}
     >
       {(rows) => <MessagesView items={rows} />}
     </MockScreen>

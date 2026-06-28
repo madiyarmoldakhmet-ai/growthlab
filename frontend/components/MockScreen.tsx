@@ -13,6 +13,8 @@ interface MockScreenProps<T> {
   load: () => T[];
   emptyText?: string;
   errorText?: string;
+  /** Optional header action (e.g. a "+ create" button). */
+  action?: ReactNode;
   children: (data: T[]) => ReactNode;
 }
 
@@ -27,6 +29,7 @@ export function MockScreen<T>({
   load,
   emptyText = "Пока нет данных.",
   errorText = "Не удалось загрузить данные. Проверьте подключение и попробуйте снова.",
+  action,
   children,
 }: MockScreenProps<T>) {
   const [mode, setMode] = useState<Mode>("data");
@@ -53,7 +56,10 @@ export function MockScreen<T>({
           <h1 className={styles.title}>{title}</h1>
           {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
         </div>
-        <span className={styles.mockBadge}>🟡 МОК-данные (заглушка под будущий API)</span>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {action}
+          <span className={styles.mockBadge}>🟡 МОК-данные (заглушка под будущий API)</span>
+        </div>
       </div>
 
       <div className={styles.toolbar}>

@@ -3,6 +3,8 @@ import { MVP_NAV } from "../lib/nav";
 
 const featured = [
   { href: "/demo", label: "▶ Демо для клиента", description: "Презентация за 3–5 минут (сценарий, постановочные данные)." },
+  { href: "/clients/new", label: "+ Создать клиента", description: "Новый клиент: продукт, цена, цель, оффер." },
+  { href: "/campaigns/new", label: "+ Создать кампанию", description: "Название, клиент, канал, цель, дата старта." },
   { href: "/dashboard", label: "Dashboard", description: "Обзорные метрики (scaffold)." },
 ];
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MockScreen } from "../../../components/MockScreen";
 import styles from "../../../components/ui.module.css";
 import { MOCK_CAMPAIGNS } from "../../../lib/mock/data";
@@ -28,7 +29,8 @@ export default function CampaignsPage() {
       title="Кампании"
       subtitle="Список кампаний: цель, канал, статус и результаты."
       load={() => MOCK_CAMPAIGNS}
-      emptyText="Кампаний пока нет. Создайте первую (форма — в Блоке 3)."
+      emptyText="Кампаний пока нет. Создайте первую."
+      action={<Link href="/campaigns/new" className={styles.headBtn}>+ Новая кампания</Link>}
     >
       {(rows) => (
         <table className={styles.table}>
