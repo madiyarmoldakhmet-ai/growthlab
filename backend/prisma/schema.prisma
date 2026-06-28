@@ -24,6 +24,7 @@ enum CampaignStatus {
 enum MessageStatus {
   queued
   scheduled
+  sending
   sent
   delivered
   failed

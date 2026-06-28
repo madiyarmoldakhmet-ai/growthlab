@@ -44,6 +44,14 @@ export const configuration = () => ({
     apiKey: process.env.ZEROBOUNCE_API_KEY ?? '',
     baseUrl: process.env.ZEROBOUNCE_BASE_URL ?? 'https://api.zerobounce.net/v2',
   },
+  sending: {
+    // SAFETY: dry-run is the default. Emails are NOT sent until DRY_RUN=false is set explicitly.
+    dryRun: (process.env.DRY_RUN ?? 'true') !== 'false',
+    throttleMs: parseInt(process.env.SEND_THROTTLE_MS ?? '1000', 10),
+    defaultDailyLimit: parseInt(process.env.MAILBOX_DAILY_LIMIT ?? '50', 10),
+    // Shared secret required on inbound provider webhooks (x-webhook-secret header).
+    webhookSecret: process.env.WEBHOOK_SECRET ?? '',
+  },
   personalization: {
     // Prompt + tone/offer live in config so they can be tuned without code changes.
     systemPrompt: process.env.PERSONALIZATION_SYSTEM_PROMPT || DEFAULT_PERSONALIZATION_PROMPT,

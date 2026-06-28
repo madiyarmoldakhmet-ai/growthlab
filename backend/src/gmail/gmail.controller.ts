@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SendGmailDto } from './dto/send-gmail.dto';
 import { SyncGmailRepliesDto } from './dto/sync-gmail-replies.dto';
 import { UpsertGmailOAuthDto } from './dto/upsert-gmail-oauth.dto';
 import { GmailService } from './gmail.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('gmail')
 export class GmailController {
   constructor(private readonly gmailService: GmailService) {}

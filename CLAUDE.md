@@ -23,7 +23,8 @@ backend/   NestJS API (src/, prisma/)
 frontend/  Next.js (вне текущих фаз)
 docs/      ARCHITECTURE, DATABASE, API, GMAIL, ROADMAP, pitch/
 ```
-Backend-модули: `auth`, `contacts`, `leads`, `verification`, `personalization`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
+Backend-модули: `auth`, `contacts`, `leads`, `verification`, `personalization`, `channels`, `sending`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
+Отправка: `ChannelSender`+`EmailSender` (транспорт `GmailService.sendEmail`). **`DRY_RUN=true` по умолчанию** (fail-safe). Перед отправкой: suppression (org) + `isSendable`. Атомарный claim `queued→sending` (нет двойной отправки). Ротация ящиков (`Channel`, min-sent, UTC дневной лимит). Вебхуки → `Event` (дедуп `providerEventId`, в транзакции), hard-bounce→suppression. Легаси `/gmail/send` теперь под JWT+DRY_RUN+suppression.
 Персонализация: `LlmClient`+`OpenAiAdapter` (токены учитываются), промпт/тон/отправитель в конфиге, footer с `unsubscribeToken`, контроль качества (`personalization/quality.util`). Расход токенов → таблица `AiRequest` (COGS, Ф7). `ai.service` (оценка ответов) — отдельный, не трогать здесь.
 Общие утилиты: `common/csv` (парсер CSV), `common/normalize.util` (email/phone/clean) — переиспользуются contacts и leads.
 Источники лидов за интерфейсом `LeadSourceAdapter` (`leads/lead-sources/`): `ApolloAdapter` (ключ из ConfigService; HTTP пока прямой, очередь — Ф6).

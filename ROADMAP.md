@@ -52,13 +52,17 @@
 - [x] Эндпоинты `POST /personalization/leads/:id`, `POST /personalization/run` (JWT, org-scope).
 - **Exit:** ✅ для sendable-лида создаётся письмо с footer; токены пишутся в `ai_requests`; build + 50 тестов + lint зелёные.
 
-## Ф5 — Отправка (sending)
+## Ф5 — Отправка (sending) ✅
 Цель: управляемая доставка email.
-- [ ] Интерфейс `ChannelSender` + Email-адаптер (Smartlead/SMTP/Gmail — выбрать).
-- [ ] **`DRY_RUN=true` по умолчанию** — письма не уходят, только лог.
-- [ ] Ротация ящиков, дневные лимиты, throttle; идемпотентный ключ на сообщение.
-- [ ] Вебхуки delivered/open/bounce → события воронки.
-- **Exit:** в DRY_RUN видно «что бы отправилось»; реальная отправка только при `DRY_RUN=false`.
+- [x] Интерфейс `ChannelSender` + `EmailSender` (транспорт — `GmailService.sendEmail`).
+- [x] **`DRY_RUN=true` по умолчанию** (fail-safe): письма не уходят, только лог + пометка. Легаси `/gmail/send` тоже под гейтом (DRY_RUN + suppression + JWT).
+- [x] Ротация ящиков (модель `Channel`, выбор по min-sent), дневные лимиты (UTC-окно, `groupBy`), throttle; **атомарный claim** (`queued→sending` через `updateMany`) против двойной отправки.
+- [x] Гейты перед отправкой: suppression (org-scoped) + `isSendable`.
+- [x] Вебхуки delivered/open/bounce → `Event` (дедуп `providerEventId`, транзакция event+side-effects), hard-bounce → suppression; shared-secret на входе.
+- [x] Эндпоинты `POST /sending/messages/:id`, `POST /sending/run`, `POST /webhooks/email/:provider`, `POST/GET /channels`. Миграция `message_status_sending` применена.
+- **Exit:** ✅ DRY_RUN-превью работает; реальная отправка только при `DRY_RUN=false`. Прошло адверсариальное ревью (22 находки, blocker/high устранены). build + 64 теста + lint зелёные.
+
+> Остаточные TODO(Ф6): per-org webhook-secret; дневной лимит best-effort под конкуренцией (очередь сериализует); один общий Gmail-аккаунт (ротация каналов = учёт, пока нет per-mailbox creds); реконсилятор «зависших» в `sending`.
 
 ## Ф6 — Кампании + планировщик (campaigns + scheduler)
 Цель: автономная работа.

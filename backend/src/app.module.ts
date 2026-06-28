@@ -6,10 +6,12 @@ import { PrismaModule } from './prisma.module';
 import { AiModule } from './ai';
 import { AuthModule } from './auth';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { ChannelsModule } from './channels/channels.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { GmailModule } from './gmail';
 import { LeadsModule } from './leads/leads.module';
 import { PersonalizationModule } from './personalization/personalization.module';
+import { SendingModule } from './sending/sending.module';
 import { VerificationModule } from './verification/verification.module';
 import { WhatsappModule } from './whatsapp';
 
@@ -28,6 +30,8 @@ import { WhatsappModule } from './whatsapp';
     LeadsModule,
     VerificationModule,
     PersonalizationModule,
+    ChannelsModule,
+    SendingModule,
     WhatsappModule,
     AiModule,
     GmailModule,

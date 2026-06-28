@@ -1,10 +1,15 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { google, gmail_v1 } from 'googleapis';
+import { AppConfiguration } from '../config/configuration';
+import { normalizeEmail } from '../common/normalize.util';
 import { PrismaService } from '../prisma.service';
 import { SendGmailDto } from './dto/send-gmail.dto';
 import { SyncGmailRepliesDto } from './dto/sync-gmail-replies.dto';
@@ -61,7 +66,12 @@ interface StoredGmailMessage {
 
 @Injectable()
 export class GmailService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(GmailService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<AppConfiguration, true>,
+  ) {}
 
   async upsertOAuth(dto: UpsertGmailOAuthDto): Promise<GmailStatus> {
     this.getEnvConfig();
@@ -99,6 +109,16 @@ export class GmailService {
 
   async send(dto: SendGmailDto): Promise<GmailSendResult> {
     const organizationId = await this.resolveOrganizationId(dto.userId);
+
+    // Compliance gate: never send to a suppressed recipient (same gate as the pipeline).
+    const recipient = normalizeEmail(dto.to);
+    if (recipient && (await this.isSuppressed(organizationId, recipient))) {
+      throw new BadRequestException({
+        code: 'recipient_suppressed',
+        message: 'Recipient is on the suppression list.',
+      });
+    }
+
     const message = await this.prisma.message.create({
       data: {
         organizationId,
@@ -111,6 +131,16 @@ export class GmailService {
         status: 'queued',
       },
     });
+
+    // SAFETY: respect the global DRY_RUN default — no real delivery, message stays queued.
+    if (this.isDryRun()) {
+      this.logger.log(`[DRY_RUN] gmail send suppressed for message ${message.id} to ${dto.to}`);
+      await this.prisma.message.update({
+        where: { id: message.id },
+        data: { metadata: { dryRun: { at: new Date().toISOString(), to: dto.to } } },
+      });
+      return { id: message.id, status: 'queued' };
+    }
 
     try {
       const gmail = await this.getGmailClient();
@@ -238,6 +268,56 @@ export class GmailService {
     } catch (error) {
       throw this.toGmailError(error);
     }
+  }
+
+  /**
+   * Pure transport: send an already-composed email via the configured Gmail account.
+   * Does NOT create a Message row (the sending pipeline owns persistence). Reused by
+   * the email ChannelSender when DRY_RUN is off.
+   */
+  async sendEmail(input: {
+    to: string;
+    subject: string;
+    body: string;
+    fromName?: string;
+  }): Promise<{ providerMessageId?: string; threadId?: string }> {
+    const gmail = await this.getGmailClient();
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    const fromEmail = profile.data.emailAddress ?? undefined;
+    const from = input.fromName && fromEmail ? `${input.fromName} <${fromEmail}>` : fromEmail;
+    const internalMessageId = randomUUID();
+
+    const raw = this.createRawEmail({
+      from,
+      to: input.to,
+      subject: input.subject,
+      body: input.body,
+      rfcMessageId: `<growthlab-${internalMessageId}@gmail.growthlab.local>`,
+      internalMessageId,
+    });
+
+    try {
+      const sent = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } });
+      return {
+        providerMessageId: sent.data.id ?? undefined,
+        threadId: sent.data.threadId ?? undefined,
+      };
+    } catch (error) {
+      throw this.toGmailError(error);
+    }
+  }
+
+  private isDryRun(): boolean {
+    return this.config.get('sending.dryRun', { infer: true }) ?? true;
+  }
+
+  private async isSuppressed(organizationId: string, address: string): Promise<boolean> {
+    const entry = await this.prisma.suppressionEntry.findUnique({
+      where: {
+        organizationId_channelType_address: { organizationId, channelType: 'email', address },
+      },
+    });
+    return Boolean(entry);
   }
 
   private async resolveOrganizationId(userId: string): Promise<string> {

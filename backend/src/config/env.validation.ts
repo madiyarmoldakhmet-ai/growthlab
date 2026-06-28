@@ -125,6 +125,26 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   SENDER_ADDRESS?: string;
+
+  @IsOptional()
+  @IsString()
+  DRY_RUN?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  SEND_THROTTLE_MS?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  MAILBOX_DAILY_LIMIT?: number;
+
+  @IsOptional()
+  @IsString()
+  WEBHOOK_SECRET?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
