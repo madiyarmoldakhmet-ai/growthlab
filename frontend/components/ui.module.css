@@ -1,0 +1,321 @@
+/* Shared MVP UI shell + screen primitives. */
+.layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  background: #f7f8fb;
+  color: #172033;
+}
+
+.sidebar {
+  background: #0f1b34;
+  color: #cdd6e4;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebarBrand {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  font-size: 14px;
+  padding: 6px 10px 14px;
+}
+
+.navLink {
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #cdd6e4;
+}
+
+.navLink:hover {
+  background: #1b2949;
+  color: #ffffff;
+}
+
+.navLinkActive {
+  background: #2d6cdf;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.sidebarFoot {
+  margin-top: auto;
+  font-size: 12px;
+  color: #7c89a3;
+  padding: 10px;
+}
+
+.content {
+  padding: 28px 32px 64px;
+  max-width: 1040px;
+}
+
+.screenHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.title {
+  font-size: 28px;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.subtitle {
+  color: #637083;
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+
+.mockBadge {
+  background: #fff4d6;
+  color: #9a6a00;
+  border: 1px solid #f1d98a;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.toolbarLabel {
+  font-size: 12px;
+  color: #8a94a6;
+}
+
+.chip {
+  border: 1px solid #cdd6e4;
+  background: #ffffff;
+  color: #475067;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chipActive {
+  background: #172033;
+  border-color: #172033;
+  color: #ffffff;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #dfe5ee;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.cardGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: #ffffff;
+  border: 1px solid #dfe5ee;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.table th {
+  text-align: left;
+  background: #f1f4f9;
+  color: #526074;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #e3e9f1;
+}
+
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f3f8;
+  vertical-align: top;
+}
+
+.muted {
+  color: #8a94a6;
+}
+
+.pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.channelTag {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #e3e9f1;
+  background: #f7f9fc;
+  color: #5b6677;
+}
+
+.state {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+  padding: 56px 20px;
+  background: #ffffff;
+  border: 1px dashed #d4dbe6;
+  border-radius: 12px;
+  color: #637083;
+}
+
+.stateError {
+  border-color: #f0c4c2;
+  background: #fdf6f6;
+  color: #a23a35;
+}
+
+.spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid #dfe5ee;
+  border-top-color: #2d6cdf;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bubble {
+  max-width: 80%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.bubbleUs {
+  justify-self: end;
+  background: #2d6cdf;
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+
+.bubbleThem {
+  justify-self: start;
+  background: #eef1f6;
+  color: #172033;
+  border-bottom-left-radius: 4px;
+}
+
+.chat {
+  display: grid;
+  gap: 8px;
+}
+
+.btn {
+  border-radius: 8px;
+  border: 1px solid #cdd6e4;
+  background: #ffffff;
+  color: #172033;
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btnPrimary {
+  background: #2d6cdf;
+  border-color: #2d6cdf;
+  color: #ffffff;
+}
+
+.btnDanger {
+  border-color: #e3b7b4;
+  color: #a23a35;
+}
+
+.gmailPreview {
+  border: 1px solid #e3e9f1;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.gmailHead {
+  background: #f7f9fc;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e3e9f1;
+  font-size: 13px;
+}
+
+.gmailBody {
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.waPreview {
+  background: #e7ded3;
+  border-radius: 10px;
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.waBubble {
+  background: #d9fdd3;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  max-width: 85%;
+  justify-self: end;
+}
+
+.note {
+  font-size: 12px;
+  color: #8a94a6;
+  margin-top: 8px;
+}
+
+.metric {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.metricValue {
+  font-size: 18px;
+  font-weight: 800;
+}
