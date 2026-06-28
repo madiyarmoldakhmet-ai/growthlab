@@ -19,6 +19,10 @@ coverage/
 gcp-*.json
 service-account*.json
 
+# Business pitch (financials) — keep out of git while repo is public.
+# Remove this line if the repo becomes private and you want the pitch tracked.
+docs/pitch/
+
 # Logs
 *.log
 npm-debug.log*
