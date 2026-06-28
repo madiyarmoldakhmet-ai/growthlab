@@ -87,6 +87,44 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   ZEROBOUNCE_BASE_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  APP_PUBLIC_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  PERSONALIZATION_SYSTEM_PROMPT?: string;
+
+  @IsOptional()
+  @IsString()
+  PERSONALIZATION_PRODUCT?: string;
+
+  @IsOptional()
+  @IsString()
+  PERSONALIZATION_TONE?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(100)
+  PERSONALIZATION_MAX_BODY_LENGTH?: number;
+
+  @IsOptional()
+  @IsString()
+  PERSONALIZATION_FOLLOWUP?: string;
+
+  @IsOptional()
+  @IsString()
+  SENDER_NAME?: string;
+
+  @IsOptional()
+  @IsString()
+  SENDER_COMPANY?: string;
+
+  @IsOptional()
+  @IsString()
+  SENDER_ADDRESS?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

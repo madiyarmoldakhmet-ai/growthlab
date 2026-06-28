@@ -2,10 +2,20 @@
  * Typed configuration factory consumed by ConfigService.
  * Access nested values with a dot path, e.g. config.get('jwt.secret', { infer: true }).
  */
+const DEFAULT_PERSONALIZATION_PROMPT = [
+  'Ты пишешь короткие холодные B2B-письма на русском языке для рынка СНГ.',
+  'Письмо должно быть персональным (используй имя, компанию, должность лида, если есть),',
+  'по делу, без воды, без давления и без спам-клише. Один понятный следующий шаг (CTA).',
+  'НЕ выдумывай факты о компании лида. НЕ добавляй подпись/футер — его добавит система.',
+  'Верни строго JSON: {"subject":"...","body":"...","followUp":"..."},',
+  'где followUp — короткое письмо-напоминание на случай отсутствия ответа.',
+].join(' ');
+
 export const configuration = () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '3001', 10),
   corsOrigin: process.env.CORS_ORIGIN,
+  appPublicUrl: process.env.APP_PUBLIC_URL ?? 'http://localhost:3001',
   uploadMaxBytes: parseInt(
     process.env.UPLOAD_MAX_BYTES ?? String(5 * 1024 * 1024),
     10,
@@ -33,6 +43,17 @@ export const configuration = () => ({
   zerobounce: {
     apiKey: process.env.ZEROBOUNCE_API_KEY ?? '',
     baseUrl: process.env.ZEROBOUNCE_BASE_URL ?? 'https://api.zerobounce.net/v2',
+  },
+  personalization: {
+    // Prompt + tone/offer live in config so they can be tuned without code changes.
+    systemPrompt: process.env.PERSONALIZATION_SYSTEM_PROMPT || DEFAULT_PERSONALIZATION_PROMPT,
+    product: process.env.PERSONALIZATION_PRODUCT ?? 'наш сервис',
+    tone: process.env.PERSONALIZATION_TONE ?? 'деловой, живой, без давления',
+    maxBodyLength: parseInt(process.env.PERSONALIZATION_MAX_BODY_LENGTH ?? '900', 10),
+    generateFollowUp: (process.env.PERSONALIZATION_FOLLOWUP ?? 'true') !== 'false',
+    senderName: process.env.SENDER_NAME ?? '',
+    senderCompany: process.env.SENDER_COMPANY ?? 'GrowLab',
+    senderAddress: process.env.SENDER_ADDRESS ?? '',
   },
 });
 

@@ -129,6 +129,7 @@ model Organization {
   settings     Setting[]
   suppressions SuppressionEntry[]
   consents     Consent[]
+  aiRequests   AiRequest[]
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
 
@@ -319,6 +320,8 @@ model Message {
   repliedAt         DateTime?     @map("replied_at")
   bouncedAt         DateTime?     @map("bounced_at")
   failedAt          DateTime?     @map("failed_at")
+  // Generation metadata: follow-up draft, quality flags, model, fallback flag.
+  metadata          Json?
   responses         Response[]
   events            Event[]
   createdAt         DateTime      @default(now()) @map("created_at")
@@ -431,6 +434,29 @@ model SuppressionEntry {
   @@unique([organizationId, channelType, address])
   @@index([organizationId, address])
   @@map("suppressions")
+}
+
+// Audit + COGS source for every LLM call (token spend feeds Ф7 analytics).
+// leadId/messageId are provenance-only scalars (no FK) to keep the log lightweight.
+model AiRequest {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  operation        String
+  provider         String
+  model            String
+  status           String       @default("success")
+  promptTokens     Int          @default(0) @map("prompt_tokens")
+  completionTokens Int          @default(0) @map("completion_tokens")
+  totalTokens      Int          @default(0) @map("total_tokens")
+  leadId           String?      @map("lead_id") @db.Uuid
+  messageId        String?      @map("message_id") @db.Uuid
+  error            String?
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@index([operation])
+  @@map("ai_requests")
 }
 
 // Positive opt-in record, required before contacting non-email channels (TG/WhatsApp).

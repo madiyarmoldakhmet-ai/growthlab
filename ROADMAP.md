@@ -43,12 +43,14 @@
 - [x] Эндпоинты `POST /verification/leads/:id`, `POST /verification/run` (JWT, org-scope). COGS — `TODO(Ф7)`.
 - **Exit:** ✅ каждый лид получает статус верификации; build + 38 тестов + lint зелёные. (Миграция не нужна — поля из Ф1.)
 
-## Ф4 — Персонализация (personalization)
+## Ф4 — Персонализация (personalization) ✅
 Цель: AI-письма.
-- [ ] Генерация subject/body/follow-up через OpenAI (`OPENAI_API_KEY`), через очередь.
-- [ ] Промпт-шаблон в конфиг, контроль спам-триггеров.
-- [ ] Учёт расхода токенов (таблица `ai_requests`), обязательный footer (отправитель + unsubscribe).
-- **Exit:** для лида генерируется персональное письмо; расход токенов виден.
+- [x] Генерация subject/body/follow-up через OpenAI (`LlmClient` + `OpenAiAdapter`, ключ из ConfigService; оффлайн-fallback; HTTP прямой + `TODO(Ф6)` на очередь).
+- [x] Промпт-шаблон + тон/оффер/отправитель в конфиге (правится без кода). Контроль качества: длина + спам-триггеры (`quality.util`).
+- [x] Учёт токенов в таблице `ai_requests` (миграция); обязательный footer (отправитель + `unsubscribeToken`-ссылка).
+- [x] Гейт `isSendable`: не генерим для невалидных лидов. Запись в `Message` (+`metadata` для follow-up/флагов, миграция).
+- [x] Эндпоинты `POST /personalization/leads/:id`, `POST /personalization/run` (JWT, org-scope).
+- **Exit:** ✅ для sendable-лида создаётся письмо с footer; токены пишутся в `ai_requests`; build + 50 тестов + lint зелёные.
 
 ## Ф5 — Отправка (sending)
 Цель: управляемая доставка email.

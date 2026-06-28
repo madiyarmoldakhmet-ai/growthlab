@@ -23,7 +23,8 @@ backend/   NestJS API (src/, prisma/)
 frontend/  Next.js (вне текущих фаз)
 docs/      ARCHITECTURE, DATABASE, API, GMAIL, ROADMAP, pitch/
 ```
-Backend-модули: `auth`, `contacts`, `leads`, `verification`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
+Backend-модули: `auth`, `contacts`, `leads`, `verification`, `personalization`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
+Персонализация: `LlmClient`+`OpenAiAdapter` (токены учитываются), промпт/тон/отправитель в конфиге, footer с `unsubscribeToken`, контроль качества (`personalization/quality.util`). Расход токенов → таблица `AiRequest` (COGS, Ф7). `ai.service` (оценка ответов) — отдельный, не трогать здесь.
 Общие утилиты: `common/csv` (парсер CSV), `common/normalize.util` (email/phone/clean) — переиспользуются contacts и leads.
 Источники лидов за интерфейсом `LeadSourceAdapter` (`leads/lead-sources/`): `ApolloAdapter` (ключ из ConfigService; HTTP пока прямой, очередь — Ф6).
 
