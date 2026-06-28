@@ -13,7 +13,7 @@ import {
   GmailSendResult,
   GmailStatus,
 } from './entities/gmail-message.entity';
-import { GmailPrismaService } from './gmail-prisma.service';
+import { PrismaService } from '../prisma.service';
 
 const GMAIL_CHANNEL = 'gmail';
 const OAUTH_SETTING_KEY = 'gmail.oauth';
@@ -61,7 +61,7 @@ interface StoredGmailMessage {
 
 @Injectable()
 export class GmailService {
-  constructor(private readonly prisma: GmailPrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async upsertOAuth(dto: UpsertGmailOAuthDto): Promise<GmailStatus> {
     this.getEnvConfig();

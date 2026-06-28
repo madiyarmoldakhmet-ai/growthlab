@@ -1,9 +1,11 @@
-import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import multipart from '@fastify/multipart';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { AppConfiguration } from './config/configuration';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -11,15 +13,22 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
 
+  const config = app.get(ConfigService<AppConfiguration, true>);
+  const corsOrigin = config.get('corsOrigin', { infer: true });
+
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()) ?? true,
+    origin: corsOrigin
+      ? corsOrigin.split(',').map((origin) => origin.trim())
+      : true,
     credentials: true,
   });
+
   await app.register(multipart, {
     limits: {
-      fileSize: Number(process.env.UPLOAD_MAX_BYTES ?? 5 * 1024 * 1024),
+      fileSize: config.get('uploadMaxBytes', { infer: true }),
     },
   });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -27,9 +36,10 @@ async function bootstrap() {
       forbidNonWhitelisted: false,
     }),
   );
+  app.useGlobalFilters(new AllExceptionsFilter());
 
-  const port = Number(process.env.PORT ?? 3001);
-  await app.listen(port);
+  const port = config.get('port', { infer: true }) ?? 3001;
+  await app.listen(port, '0.0.0.0');
 }
 
 void bootstrap();

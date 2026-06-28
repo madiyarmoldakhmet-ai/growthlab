@@ -12,6 +12,13 @@ coverage/
 .env.*
 !.env.example
 
+# Google / OAuth credential files (NEVER commit)
+*client_secret*.json
+*credentials*.json
+*.pem
+gcp-*.json
+service-account*.json
+
 # Logs
 *.log
 npm-debug.log*

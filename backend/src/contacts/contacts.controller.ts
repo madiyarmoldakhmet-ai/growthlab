@@ -7,55 +7,69 @@ import {
   Patch,
   Post,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { FastifyRequest } from 'fastify';
+import { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthScope } from '../common/types/auth-scope';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { ContactsService } from './contacts.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('contacts')
 export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 
   @Get()
-  findAll() {
-    return this.contactsService.findAll();
+  findAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.contactsService.findAll(this.scope(user));
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.contactsService.findOne(id);
+  findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.contactsService.findOne(this.scope(user), id);
   }
 
   @Post()
-  create(@Body() dto: CreateContactDto) {
-    return this.contactsService.create(dto);
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateContactDto) {
+    return this.contactsService.create(this.scope(user), dto);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateContactDto) {
-    return this.contactsService.update(id, dto);
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateContactDto,
+  ) {
+    return this.contactsService.update(this.scope(user), id, dto);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.contactsService.remove(id);
+  async remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    await this.contactsService.remove(this.scope(user), id);
     return { deleted: true };
   }
 
   @Post('deduplicate')
-  removeDuplicates() {
-    return this.contactsService.removeDuplicates();
+  removeDuplicates(@CurrentUser() user: AuthenticatedUser) {
+    return this.contactsService.removeDuplicates(this.scope(user));
   }
 
   @Post('import/csv')
-  async importCsv(@Req() request: FastifyRequest) {
-    return this.contactsService.importCsv(await this.readUpload(request));
+  async importCsv(@CurrentUser() user: AuthenticatedUser, @Req() request: FastifyRequest) {
+    return this.contactsService.importCsv(this.scope(user), await this.readUpload(request));
   }
 
   @Post('import/excel')
-  async importExcel(@Req() request: FastifyRequest) {
-    return this.contactsService.importExcel(await this.readUpload(request));
+  async importExcel(@CurrentUser() user: AuthenticatedUser, @Req() request: FastifyRequest) {
+    return this.contactsService.importExcel(this.scope(user), await this.readUpload(request));
+  }
+
+  private scope(user: AuthenticatedUser): AuthScope {
+    return { organizationId: user.organizationId, userId: user.id };
   }
 
   private async readUpload(request: FastifyRequest): Promise<Buffer | undefined> {

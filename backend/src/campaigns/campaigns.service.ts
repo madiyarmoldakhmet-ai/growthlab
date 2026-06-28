@@ -1,21 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CampaignStatus as PrismaCampaignStatus } from '@prisma/client';
+import { AuthScope } from '../common/types/auth-scope';
 import { PrismaService } from '../prisma.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { Campaign, CampaignStatus } from './entities/campaign.entity';
 
-const LEGACY_USER_EMAIL = 'legacy@growthlab.local';
-
 @Injectable()
 export class CampaignsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createCampaignDto: CreateCampaignDto): Promise<Campaign> {
-    const userId = await this.getUserScope();
+  async create(scope: AuthScope, createCampaignDto: CreateCampaignDto): Promise<Campaign> {
     const campaign = await this.prisma.campaign.create({
       data: {
-        user: { connect: { id: userId } },
+        organization: { connect: { id: scope.organizationId } },
+        user: { connect: { id: scope.userId } },
         name: createCampaignDto.name,
         description: createCampaignDto.description,
         status: this.toPrismaStatus(createCampaignDto.status ?? 'draft'),
@@ -25,18 +24,21 @@ export class CampaignsService {
     return this.toEntity(campaign);
   }
 
-  async findAll(): Promise<Campaign[]> {
-    const userId = await this.getUserScope();
+  async findAll(scope: AuthScope): Promise<Campaign[]> {
     const campaigns = await this.prisma.campaign.findMany({
-      where: { userId },
+      where: { organizationId: scope.organizationId },
       orderBy: { createdAt: 'desc' },
     });
 
     return campaigns.map((campaign) => this.toEntity(campaign));
   }
 
-  async update(id: string, updateCampaignDto: UpdateCampaignDto): Promise<Campaign> {
-    await this.findById(id);
+  async update(
+    scope: AuthScope,
+    id: string,
+    updateCampaignDto: UpdateCampaignDto,
+  ): Promise<Campaign> {
+    await this.findById(scope, id);
     const updatedCampaign = await this.prisma.campaign.update({
       where: { id },
       data: {
@@ -51,15 +53,14 @@ export class CampaignsService {
     return this.toEntity(updatedCampaign);
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findById(id);
+  async remove(scope: AuthScope, id: string): Promise<void> {
+    await this.findById(scope, id);
     await this.prisma.campaign.delete({ where: { id } });
   }
 
-  private async findById(id: string): Promise<Campaign> {
-    const userId = await this.getUserScope();
+  private async findById(scope: AuthScope, id: string): Promise<Campaign> {
     const campaign = await this.prisma.campaign.findFirst({
-      where: { id, userId },
+      where: { id, organizationId: scope.organizationId },
     });
 
     if (!campaign) {
@@ -89,21 +90,5 @@ export class CampaignsService {
 
   private toPrismaStatus(status: CampaignStatus): PrismaCampaignStatus {
     return status as PrismaCampaignStatus;
-  }
-
-  private async getUserScope(): Promise<string> {
-    // TODO: Pass CurrentUser.id from JWT-protected controllers and remove this legacy fallback.
-    const user = await this.prisma.user.upsert({
-      where: { email: LEGACY_USER_EMAIL },
-      update: {},
-      create: {
-        email: LEGACY_USER_EMAIL,
-        passwordHash: 'legacy-local-user',
-        role: 'admin',
-      },
-      select: { id: true },
-    });
-
-    return user.id;
   }
 }

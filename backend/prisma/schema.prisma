@@ -27,56 +27,77 @@ enum MessageStatus {
   failed
 }
 
-model User {
-  id           String     @id @default(uuid()) @db.Uuid
-  email        String     @unique
-  passwordHash String     @map("password_hash")
-  name         String?
-  role         UserRole   @default(member)
-  contacts     Contact[]
-  campaigns    Campaign[]
-  messages     Message[]
-  settings     Setting[]
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+model Organization {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String
+  users     User[]
+  contacts  Contact[]
+  campaigns Campaign[]
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
 
+  @@map("organizations")
+}
+
+model User {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String       @unique
+  passwordHash   String       @map("password_hash")
+  name           String?
+  role           UserRole     @default(member)
+  contacts       Contact[]
+  campaigns      Campaign[]
+  messages       Message[]
+  settings       Setting[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([organizationId])
   @@map("users")
 }
 
 model Contact {
-  id          String     @id @default(uuid()) @db.Uuid
-  userId      String     @map("user_id") @db.Uuid
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email       String?
-  phone       String?
-  firstName   String?    @map("first_name")
-  lastName    String?    @map("last_name")
-  company     String?
-  metadata    Json?
-  messages    Message[]
-  responses   Response[]
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String       @map("user_id") @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email          String?
+  phone          String?
+  firstName      String?      @map("first_name")
+  lastName       String?      @map("last_name")
+  company        String?
+  metadata       Json?
+  messages       Message[]
+  responses      Response[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
+  @@index([organizationId])
   @@index([userId])
   @@index([email])
   @@map("contacts")
 }
 
 model Campaign {
-  id          String         @id @default(uuid()) @db.Uuid
-  userId      String         @map("user_id") @db.Uuid
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  status      CampaignStatus @default(draft)
-  startsAt    DateTime?      @map("starts_at")
-  endsAt      DateTime?      @map("ends_at")
-  messages    Message[]
-  responses   Response[]
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String         @map("user_id") @db.Uuid
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  status         CampaignStatus @default(draft)
+  startsAt       DateTime?      @map("starts_at")
+  endsAt         DateTime?      @map("ends_at")
+  messages       Message[]
+  responses      Response[]
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
+  @@index([organizationId])
   @@index([userId])
   @@index([status])
   @@map("campaigns")

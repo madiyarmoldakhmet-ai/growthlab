@@ -1,0 +1,82 @@
+# ROADMAP — GrowthLab
+
+Фазы реализации cold-email бота с AI-персонализацией. Работаем **по одной фазе за раз**:
+фаза → сборка/проверка → коммит → отчёт → ждём `next`. Push — только по подтверждению владельца.
+
+Легенда: `[ ]` не начато · `[~]` в работе · `[x]` готово.
+
+---
+
+## Ф0 — Фундамент *(до бизнес-логики)* ✅
+Цель: привести каркас к правилам из `CLAUDE.md`.
+- [x] `@nestjs/config` + `ConfigService`, типобезопасная валидация env (`env.validation.ts`).
+- [x] Единый глобальный `PrismaModule`/`PrismaService` (дубль `gmail-prisma.service.ts` удалён).
+- [x] Модель `Organization` + `organizationId` на `User/Contact/Campaign`; auth-скоуп по `organizationId` (legacy-заглушка убрана).
+- [x] Глобальный `AllExceptionsFilter` → единый формат ошибок (response envelope).
+- [x] Каркас тестов (jest + ts-jest), smoke-тесты (env-валидация, AI-fallback) — 7 проходят.
+- [x] ESLint flat config для backend (`npm run lint`).
+- **Exit:** ✅ собирается, тесты зелёные, lint без ошибок; контакты/кампании изолированы по организации; миграцию применяет владелец (`npm run prisma:migrate`).
+
+## Ф1 — Доменные модели + миграции
+Цель: схема под весь пайплайн.
+- [ ] Модели/поля: `Lead`/`Contact` (статус валидности, источник), `Campaign` (goal/channel/audience/dates), `Message` (идемпотентный ключ, provider id), `Channel`, `Event` (этапы воронки), `SuppressionEntry`.
+- [ ] `campaign_contacts` (состав аудитории), `message_events`/`Event` (append-only аудит).
+- [ ] Миграции Prisma + индексы по `organizationId` и фильтрам.
+- **Exit:** `prisma migrate` проходит, модели покрывают воронку из `docs/pitch/README.md`.
+
+## Ф2 — Лидогенерация (leads)
+Цель: наполнять базу лидов.
+- [ ] Интерфейс `LeadSource`.
+- [ ] `ApolloAdapter` (ключ из env, вызовы через очередь).
+- [ ] CSV-импорт как fallback (уже частично есть в `contacts`).
+- [ ] Дедуп + нормализация (email/phone), привязка к `organizationId`.
+- **Exit:** лиды из Apollo и CSV попадают в БД без дублей.
+
+## Ф3 — Верификация (verification)
+Цель: чистить базу перед отправкой.
+- [ ] Интерфейс `EmailVerifier`.
+- [ ] `ZeroBounceAdapter` (ключ из env, через очередь, ретраи).
+- [ ] Статус валидности на лиде; невалидные не идут в рассылку.
+- **Exit:** каждый лид имеет статус верификации; учёт расхода (COGS).
+
+## Ф4 — Персонализация (personalization)
+Цель: AI-письма.
+- [ ] Генерация subject/body/follow-up через OpenAI (`OPENAI_API_KEY`), через очередь.
+- [ ] Промпт-шаблон в конфиг, контроль спам-триггеров.
+- [ ] Учёт расхода токенов (таблица `ai_requests`), обязательный footer (отправитель + unsubscribe).
+- **Exit:** для лида генерируется персональное письмо; расход токенов виден.
+
+## Ф5 — Отправка (sending)
+Цель: управляемая доставка email.
+- [ ] Интерфейс `ChannelSender` + Email-адаптер (Smartlead/SMTP/Gmail — выбрать).
+- [ ] **`DRY_RUN=true` по умолчанию** — письма не уходят, только лог.
+- [ ] Ротация ящиков, дневные лимиты, throttle; идемпотентный ключ на сообщение.
+- [ ] Вебхуки delivered/open/bounce → события воронки.
+- **Exit:** в DRY_RUN видно «что бы отправилось»; реальная отправка только при `DRY_RUN=false`.
+
+## Ф6 — Кампании + планировщик (campaigns + scheduler)
+Цель: автономная работа.
+- [ ] Секвенции (письмо + follow-up), рабочие часы/таймзоны.
+- [ ] `@nestjs/schedule` + BullMQ: autoresearch (поиск лидов) + рассылка по расписанию.
+- [ ] Стоп на ответе/отписке; A/B-тест писем.
+- **Exit:** кампания сама шлёт по расписанию и останавливается по правилам.
+
+## Ф7 — Аналитика (analytics)
+Цель: измеримая воронка.
+- [ ] Агрегация событий → этапы воронки (sent/delivered/opened/replied/positive/demo/won).
+- [ ] Метрики: deliverability, open, reply, conversion, CAC, COGS, LTV.
+- [ ] Эндпоинты для дашборда фронта.
+- **Exit:** дашборд показывает реальную воронку «1000 → 2–3 клиента».
+
+---
+
+## Позже / вне MVP
+- **Ф8 — доп. каналы (официально):** Telegram Bot API + WhatsApp Business Cloud API, opt-in, шаблоны.
+- **Compliance-расширение:** consent-лог для TG/WA, расширенные suppression-правила.
+- **Заморожено:** текущий WhatsApp на Baileys — deprecated, не расширять.
+
+## Принципы
+- Каждый внешний сервис — за интерфейсом-адаптером.
+- Все внешние вызовы — через BullMQ+Redis (ретраи, rate-limit).
+- Идемпотентность + аудит событий + compliance — не в конце, а сразу в дизайне каждой фазы.
+- Секреты только в `.env`; новые ключи — заглушками в `.env.example`.

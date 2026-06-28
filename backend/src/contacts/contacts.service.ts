@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuthScope } from '../common/types/auth-scope';
 import { PrismaService } from '../prisma.service';
 import { Contact, ContactImportResult, ContactInput } from './contact.entity';
 import { CreateContactDto } from './dto/create-contact.dto';
@@ -8,26 +9,22 @@ import { UpdateContactDto } from './dto/update-contact.dto';
 type RawRow = Record<string, unknown>;
 type ContactRecord = Prisma.ContactGetPayload<Record<string, never>>;
 
-const LEGACY_USER_EMAIL = 'legacy@growthlab.local';
-
 @Injectable()
 export class ContactsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(): Promise<Contact[]> {
-    const userId = await this.getUserScope();
+  async findAll(scope: AuthScope): Promise<Contact[]> {
     const contacts = await this.prisma.contact.findMany({
-      where: { userId },
+      where: { organizationId: scope.organizationId },
       orderBy: { createdAt: 'desc' },
     });
 
     return contacts.map((contact) => this.toEntity(contact));
   }
 
-  async findOne(id: string): Promise<Contact> {
-    const userId = await this.getUserScope();
+  async findOne(scope: AuthScope, id: string): Promise<Contact> {
     const contact = await this.prisma.contact.findFirst({
-      where: { id, userId },
+      where: { id, organizationId: scope.organizationId },
     });
 
     if (!contact) {
@@ -37,27 +34,25 @@ export class ContactsService {
     return this.toEntity(contact);
   }
 
-  async create(dto: CreateContactDto): Promise<Contact> {
-    const userId = await this.getUserScope();
+  async create(scope: AuthScope, dto: CreateContactDto): Promise<Contact> {
     const input = this.normalizeInput(dto);
-    const duplicate = await this.findDuplicate(userId, input);
+    const duplicate = await this.findDuplicate(scope, input);
 
     if (duplicate) {
       throw new BadRequestException('Contact already exists');
     }
 
     const contact = await this.prisma.contact.create({
-      data: this.toCreateData(userId, input),
+      data: this.toCreateData(scope, input),
     });
 
     return this.toEntity(contact);
   }
 
-  async update(id: string, dto: UpdateContactDto): Promise<Contact> {
-    const userId = await this.getUserScope();
-    const current = await this.findOne(id);
+  async update(scope: AuthScope, id: string, dto: UpdateContactDto): Promise<Contact> {
+    const current = await this.findOne(scope, id);
     const nextInput = this.normalizeInput({ ...current, ...dto });
-    const duplicate = await this.findDuplicate(userId, nextInput, id);
+    const duplicate = await this.findDuplicate(scope, nextInput, id);
 
     if (duplicate) {
       throw new BadRequestException('Contact already exists');
@@ -71,10 +66,9 @@ export class ContactsService {
     return this.toEntity(updated);
   }
 
-  async remove(id: string): Promise<void> {
-    const userId = await this.getUserScope();
+  async remove(scope: AuthScope, id: string): Promise<void> {
     const contact = await this.prisma.contact.findFirst({
-      where: { id, userId },
+      where: { id, organizationId: scope.organizationId },
       select: { id: true },
     });
 
@@ -85,12 +79,13 @@ export class ContactsService {
     await this.prisma.contact.delete({ where: { id } });
   }
 
-  async removeDuplicates(): Promise<ContactImportResult> {
-    const userId = await this.getUserScope();
-    const contacts = (await this.prisma.contact.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'asc' },
-    })).map((contact) => this.toEntity(contact));
+  async removeDuplicates(scope: AuthScope): Promise<ContactImportResult> {
+    const contacts = (
+      await this.prisma.contact.findMany({
+        where: { organizationId: scope.organizationId },
+        orderBy: { createdAt: 'asc' },
+      })
+    ).map((contact) => this.toEntity(contact));
     const unique = new Map<string, Contact>();
     const duplicates: string[] = [];
 
@@ -109,24 +104,24 @@ export class ContactsService {
 
     if (duplicates.length) {
       await this.prisma.contact.deleteMany({
-        where: { id: { in: duplicates }, userId },
+        where: { id: { in: duplicates }, organizationId: scope.organizationId },
       });
     }
 
     return {
       imported: 0,
       skippedDuplicates: duplicates.length,
-      contacts: await this.findAll(),
+      contacts: await this.findAll(scope),
     };
   }
 
-  async importCsv(buffer?: Buffer): Promise<ContactImportResult> {
+  async importCsv(scope: AuthScope, buffer?: Buffer): Promise<ContactImportResult> {
     this.ensureFile(buffer);
     const rows = this.parseCsv(buffer!.toString('utf8'));
-    return this.importRows(rows, 'csv');
+    return this.importRows(scope, rows, 'csv');
   }
 
-  async importExcel(buffer?: Buffer): Promise<ContactImportResult> {
+  async importExcel(scope: AuthScope, buffer?: Buffer): Promise<ContactImportResult> {
     this.ensureFile(buffer);
     const excel = await import('exceljs');
     const workbook = new excel.Workbook();
@@ -153,11 +148,14 @@ export class ContactsService {
       }, {}),
     );
 
-    return this.importRows(records, 'excel');
+    return this.importRows(scope, records, 'excel');
   }
 
-  private async importRows(rows: RawRow[], source: string): Promise<ContactImportResult> {
-    const userId = await this.getUserScope();
+  private async importRows(
+    scope: AuthScope,
+    rows: RawRow[],
+    source: string,
+  ): Promise<ContactImportResult> {
     let imported = 0;
     let skippedDuplicates = 0;
     const contacts: Contact[] = [];
@@ -177,14 +175,14 @@ export class ContactsService {
         continue;
       }
 
-      if (await this.findDuplicate(userId, input)) {
+      if (await this.findDuplicate(scope, input)) {
         skippedDuplicates += 1;
         continue;
       }
 
       const contact = this.toEntity(
         await this.prisma.contact.create({
-          data: this.toCreateData(userId, input),
+          data: this.toCreateData(scope, input),
         }),
       );
       imported += 1;
@@ -207,7 +205,7 @@ export class ContactsService {
   }
 
   private async findDuplicate(
-    userId: string,
+    scope: AuthScope,
     input: Partial<ContactInput>,
     exceptId?: string,
   ): Promise<Contact | undefined> {
@@ -219,7 +217,7 @@ export class ContactsService {
 
     const contacts = await this.prisma.contact.findMany({
       where: {
-        userId,
+        organizationId: scope.organizationId,
         id: exceptId ? { not: exceptId } : undefined,
         OR: [
           input.email ? { email: input.email.toLowerCase() } : undefined,
@@ -228,9 +226,9 @@ export class ContactsService {
       },
     });
 
-    return contacts.map((contact) => this.toEntity(contact)).find((contact) => {
-      return this.getDeduplicationKey(contact) === inputKey;
-    });
+    return contacts
+      .map((contact) => this.toEntity(contact))
+      .find((contact) => this.getDeduplicationKey(contact) === inputKey);
   }
 
   private getDeduplicationKey(contact: Partial<ContactInput>): string | undefined {
@@ -389,9 +387,10 @@ export class ContactsService {
     return String(value);
   }
 
-  private toCreateData(userId: string, input: ContactInput): Prisma.ContactCreateInput {
+  private toCreateData(scope: AuthScope, input: ContactInput): Prisma.ContactCreateInput {
     return {
-      user: { connect: { id: userId } },
+      organization: { connect: { id: scope.organizationId } },
+      user: { connect: { id: scope.userId } },
       email: input.email,
       phone: input.phone,
       firstName: input.firstName,
@@ -454,21 +453,5 @@ export class ContactsService {
       position: this.clean(metadata.position),
       source: this.clean(metadata.source),
     };
-  }
-
-  private async getUserScope(): Promise<string> {
-    // TODO: Pass CurrentUser.id from JWT-protected controllers and remove this legacy fallback.
-    const user = await this.prisma.user.upsert({
-      where: { email: LEGACY_USER_EMAIL },
-      update: {},
-      create: {
-        email: LEGACY_USER_EMAIL,
-        passwordHash: 'legacy-local-user',
-        role: 'admin',
-      },
-      select: { id: true },
-    });
-
-    return user.id;
   }
 }
