@@ -34,12 +34,14 @@
 - [x] Эндпоинты `GET /leads`, `POST /leads/import/csv`, `POST /leads/search/apollo` (JWT, org-scope).
 - **Exit:** ✅ лиды из Apollo и CSV пишутся в `leads` без дублей; build + 23 теста + lint зелёные. (Миграция не нужна — таблица из Ф1.)
 
-## Ф3 — Верификация (verification)
+## Ф3 — Верификация (verification) ✅
 Цель: чистить базу перед отправкой.
-- [ ] Интерфейс `EmailVerifier`.
-- [ ] `ZeroBounceAdapter` (ключ из env, через очередь, ретраи).
-- [ ] Статус валидности на лиде; невалидные не идут в рассылку.
-- **Exit:** каждый лид имеет статус верификации; учёт расхода (COGS).
+- [x] Интерфейс `EmailVerifier`.
+- [x] `ZeroBounceAdapter` (ключ из ConfigService; статусы valid/invalid/catch_all/risky/unknown; HTTP прямой + `TODO(Ф6)` на очередь).
+- [x] Статус на лиде (`verificationStatus` + `verifiedAt`); гейт `isSendable` (valid/catch_all) — Ф5 не шлёт невалидным.
+- [x] Кэш: повторно не верифицируем (фильтр `verificationStatus='unverified'`; single — флаг `force`).
+- [x] Эндпоинты `POST /verification/leads/:id`, `POST /verification/run` (JWT, org-scope). COGS — `TODO(Ф7)`.
+- **Exit:** ✅ каждый лид получает статус верификации; build + 38 тестов + lint зелёные. (Миграция не нужна — поля из Ф1.)
 
 ## Ф4 — Персонализация (personalization)
 Цель: AI-письма.

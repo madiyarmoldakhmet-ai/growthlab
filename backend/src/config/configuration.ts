@@ -30,6 +30,10 @@ export const configuration = () => ({
     apiKey: process.env.APOLLO_API_KEY ?? '',
     baseUrl: process.env.APOLLO_BASE_URL ?? 'https://api.apollo.io',
   },
+  zerobounce: {
+    apiKey: process.env.ZEROBOUNCE_API_KEY ?? '',
+    baseUrl: process.env.ZEROBOUNCE_BASE_URL ?? 'https://api.zerobounce.net/v2',
+  },
 });
 
 export type AppConfiguration = ReturnType<typeof configuration>;

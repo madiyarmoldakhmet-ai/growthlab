@@ -23,7 +23,7 @@ backend/   NestJS API (src/, prisma/)
 frontend/  Next.js (вне текущих фаз)
 docs/      ARCHITECTURE, DATABASE, API, GMAIL, ROADMAP, pitch/
 ```
-Backend-модули: `auth`, `contacts`, `leads`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
+Backend-модули: `auth`, `contacts`, `leads`, `verification`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
 Общие утилиты: `common/csv` (парсер CSV), `common/normalize.util` (email/phone/clean) — переиспользуются contacts и leads.
 Источники лидов за интерфейсом `LeadSourceAdapter` (`leads/lead-sources/`): `ApolloAdapter` (ключ из ConfigService; HTTP пока прямой, очередь — Ф6).
 
@@ -46,6 +46,7 @@ Backend-модули: `auth`, `contacts`, `leads`, `campaigns`, `gmail`, `whatsa
 - **Монотонные статусы Message** (только вперёд) — в sending/webhook сервисе (Ф5).
 - **idempotencyKey** пайплайн ставит всегда (в БД nullable для ручных Gmail-отправок).
 - Дедуп лидов без email (по phone) — на уровне сервиса в Ф2.
+- **Гейт верификации:** Ф5 шлёт только лидам с `isSendable(verificationStatus)` (valid/catch_all) — `verification/email-verifier.interface.ts`. Кэш = сам `lead.verificationStatus` (повторно не верифицируем).
 
 ## Команды (backend/)
 ```bash

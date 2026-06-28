@@ -79,6 +79,14 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   APOLLO_BASE_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  ZEROBOUNCE_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  ZEROBOUNCE_BASE_URL?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
