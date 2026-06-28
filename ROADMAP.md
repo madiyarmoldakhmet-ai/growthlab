@@ -25,13 +25,14 @@
 - [x] Миграция `20260628010000_domain_models` создана и **применена к Neon** (`migrate deploy`); схема прошла адверсариальное ревью (41 находка, blocker'ы устранены).
 - **Exit:** ✅ migrate применён, 6 новых таблиц в БД, build+11 тестов+lint зелёные. Модель покрывает воронку `docs/pitch/README.md`.
 
-## Ф2 — Лидогенерация (leads)
+## Ф2 — Лидогенерация (leads) ✅
 Цель: наполнять базу лидов.
-- [ ] Интерфейс `LeadSource`.
-- [ ] `ApolloAdapter` (ключ из env, вызовы через очередь).
-- [ ] CSV-импорт как fallback (уже частично есть в `contacts`).
-- [ ] Дедуп + нормализация (email/phone), привязка к `organizationId`.
-- **Exit:** лиды из Apollo и CSV попадают в БД без дублей.
+- [x] Интерфейс `LeadSourceAdapter` (имя — чтобы не конфликтовать с Prisma-enum `LeadSource`).
+- [x] `ApolloAdapter` (ключ из ConfigService; прямой HTTP с `TODO(Ф6)` на очередь BullMQ).
+- [x] CSV-импорт fallback: общий парсер вынесен в `common/csv` + `common/normalize`, переиспользуется contacts и leads.
+- [x] Дедуп по `(organizationId, email)` (in-batch + против БД + `createMany skipDuplicates`), нормализация email.
+- [x] Эндпоинты `GET /leads`, `POST /leads/import/csv`, `POST /leads/search/apollo` (JWT, org-scope).
+- **Exit:** ✅ лиды из Apollo и CSV пишутся в `leads` без дублей; build + 23 теста + lint зелёные. (Миграция не нужна — таблица из Ф1.)
 
 ## Ф3 — Верификация (verification)
 Цель: чистить базу перед отправкой.

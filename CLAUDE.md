@@ -23,7 +23,9 @@ backend/   NestJS API (src/, prisma/)
 frontend/  Next.js (вне текущих фаз)
 docs/      ARCHITECTURE, DATABASE, API, GMAIL, ROADMAP, pitch/
 ```
-Backend-модули: `auth`, `contacts`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
+Backend-модули: `auth`, `contacts`, `leads`, `campaigns`, `gmail`, `whatsapp`, `ai`, `prisma.service.ts`.
+Общие утилиты: `common/csv` (парсер CSV), `common/normalize.util` (email/phone/clean) — переиспользуются contacts и leads.
+Источники лидов за интерфейсом `LeadSourceAdapter` (`leads/lead-sources/`): `ApolloAdapter` (ключ из ConfigService; HTTP пока прямой, очередь — Ф6).
 
 ## Доменная модель (Ф1)
 Всё tenant-scoped по `organizationId`. Сущности:

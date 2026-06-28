@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { parseCsv, pickField } from '../common/csv/csv.util';
+import { cleanString, normalizeEmail, normalizePhone } from '../common/normalize.util';
 import { AuthScope } from '../common/types/auth-scope';
 import { PrismaService } from '../prisma.service';
 import { Contact, ContactImportResult, ContactInput } from './contact.entity';
@@ -117,7 +119,7 @@ export class ContactsService {
 
   async importCsv(scope: AuthScope, buffer?: Buffer): Promise<ContactImportResult> {
     this.ensureFile(buffer);
-    const rows = this.parseCsv(buffer!.toString('utf8'));
+    const rows = parseCsv(buffer!.toString('utf8'));
     return this.importRows(scope, rows, 'csv');
   }
 
@@ -162,12 +164,12 @@ export class ContactsService {
 
     for (const row of rows) {
       const input = this.normalizeInput({
-        firstName: this.pick(row, ['firstName', 'first_name', 'name', 'imya']),
-        lastName: this.pick(row, ['lastName', 'last_name', 'surname', 'familiya']),
-        email: this.pick(row, ['email', 'e-mail', 'mail', 'pochta']),
-        phone: this.pick(row, ['phone', 'phoneNumber', 'phone_number', 'telefon']),
-        company: this.pick(row, ['company', 'organization', 'kompaniya']),
-        position: this.pick(row, ['position', 'title', 'jobTitle', 'dolzhnost']),
+        firstName: pickField(row, ['firstName', 'first_name', 'name', 'imya']),
+        lastName: pickField(row, ['lastName', 'last_name', 'surname', 'familiya']),
+        email: pickField(row, ['email', 'e-mail', 'mail', 'pochta']),
+        phone: pickField(row, ['phone', 'phoneNumber', 'phone_number', 'telefon']),
+        company: pickField(row, ['company', 'organization', 'kompaniya']),
+        position: pickField(row, ['position', 'title', 'jobTitle', 'dolzhnost']),
         source,
       });
 
@@ -194,13 +196,13 @@ export class ContactsService {
 
   private normalizeInput(input: Partial<ContactInput>): ContactInput {
     return {
-      firstName: this.clean(input.firstName),
-      lastName: this.clean(input.lastName),
-      email: this.clean(input.email)?.toLowerCase(),
-      phone: this.normalizePhone(input.phone),
-      company: this.clean(input.company),
-      position: this.clean(input.position),
-      source: this.clean(input.source),
+      firstName: cleanString(input.firstName),
+      lastName: cleanString(input.lastName),
+      email: normalizeEmail(input.email),
+      phone: normalizePhone(input.phone),
+      company: cleanString(input.company),
+      position: cleanString(input.position),
+      source: cleanString(input.source),
     };
   }
 
@@ -220,8 +222,8 @@ export class ContactsService {
         organizationId: scope.organizationId,
         id: exceptId ? { not: exceptId } : undefined,
         OR: [
-          input.email ? { email: input.email.toLowerCase() } : undefined,
-          input.phone ? { phone: this.normalizePhone(input.phone) } : undefined,
+          input.email ? { email: normalizeEmail(input.email) } : undefined,
+          input.phone ? { phone: normalizePhone(input.phone) } : undefined,
         ].filter(Boolean) as Prisma.ContactWhereInput[],
       },
     });
@@ -233,130 +235,20 @@ export class ContactsService {
 
   private getDeduplicationKey(contact: Partial<ContactInput>): string | undefined {
     if (contact.email) {
-      return `email:${contact.email.toLowerCase()}`;
+      return `email:${normalizeEmail(contact.email)}`;
     }
 
     if (contact.phone) {
-      return `phone:${this.normalizePhone(contact.phone)}`;
+      return `phone:${normalizePhone(contact.phone)}`;
     }
 
     return undefined;
-  }
-
-  private parseCsv(content: string): RawRow[] {
-    const rows = this.readCsvRows(content.replace(/^\uFEFF/, ''));
-
-    if (rows.length < 2) {
-      return [];
-    }
-
-    const headers = rows[0].map((header) => header.trim());
-
-    return rows.slice(1).map((row) =>
-      headers.reduce<RawRow>((acc, header, index) => {
-        acc[header] = row[index] ?? '';
-        return acc;
-      }, {}),
-    );
   }
 
   private ensureFile(buffer?: Buffer): void {
     if (!buffer?.length) {
       throw new BadRequestException('File is required');
     }
-  }
-
-  private readCsvRows(content: string): string[][] {
-    const rows: string[][] = [];
-    const delimiter = this.detectDelimiter(content);
-    let current = '';
-    let row: string[] = [];
-    let quoted = false;
-
-    for (let index = 0; index < content.length; index += 1) {
-      const char = content[index];
-      const next = content[index + 1];
-
-      if (char === '"' && quoted && next === '"') {
-        current += '"';
-        index += 1;
-        continue;
-      }
-
-      if (char === '"') {
-        quoted = !quoted;
-        continue;
-      }
-
-      if (char === delimiter && !quoted) {
-        row.push(current);
-        current = '';
-        continue;
-      }
-
-      if ((char === '\n' || char === '\r') && !quoted) {
-        if (char === '\r' && next === '\n') {
-          index += 1;
-        }
-        row.push(current);
-        rows.push(row);
-        current = '';
-        row = [];
-        continue;
-      }
-
-      current += char;
-    }
-
-    if (current || row.length) {
-      row.push(current);
-      rows.push(row);
-    }
-
-    return rows.filter((cells) => cells.some((cell) => cell.trim()));
-  }
-
-  private detectDelimiter(content: string): ',' | ';' {
-    const firstLine = content.split(/\r?\n/, 1)[0] ?? '';
-    const commaCount = firstLine.split(',').length;
-    const semicolonCount = firstLine.split(';').length;
-
-    return semicolonCount > commaCount ? ';' : ',';
-  }
-
-  private pick(row: RawRow, keys: string[]): string | undefined {
-    const normalizedEntries = new Map(
-      Object.entries(row).map(([key, value]) => [key.trim().toLowerCase(), String(value)]),
-    );
-
-    for (const key of keys) {
-      const value = normalizedEntries.get(key.toLowerCase());
-
-      if (value) {
-        return value;
-      }
-    }
-
-    return undefined;
-  }
-
-  private clean(value: unknown): string | undefined {
-    if (value === null || value === undefined) {
-      return undefined;
-    }
-
-    const cleaned = String(value).trim();
-    return cleaned || undefined;
-  }
-
-  private normalizePhone(value: unknown): string | undefined {
-    const cleaned = this.clean(value);
-
-    if (!cleaned) {
-      return undefined;
-    }
-
-    return cleaned.replace(/[^\d+]/g, '');
   }
 
   private excelCellToString(value: unknown): string {
@@ -450,8 +342,8 @@ export class ContactsService {
     const metadata = value as Record<string, unknown>;
 
     return {
-      position: this.clean(metadata.position),
-      source: this.clean(metadata.source),
+      position: cleanString(metadata.position),
+      source: cleanString(metadata.source),
     };
   }
 }

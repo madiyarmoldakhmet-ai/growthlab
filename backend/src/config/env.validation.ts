@@ -71,6 +71,14 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   OPENAI_BASE_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  APOLLO_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  APOLLO_BASE_URL?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

@@ -26,6 +26,10 @@ export const configuration = () => ({
     model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
     baseUrl: process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
   },
+  apollo: {
+    apiKey: process.env.APOLLO_API_KEY ?? '',
+    baseUrl: process.env.APOLLO_BASE_URL ?? 'https://api.apollo.io',
+  },
 });
 
 export type AppConfiguration = ReturnType<typeof configuration>;

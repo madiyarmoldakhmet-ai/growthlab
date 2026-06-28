@@ -8,6 +8,7 @@ import { AuthModule } from './auth';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { GmailModule } from './gmail';
+import { LeadsModule } from './leads/leads.module';
 import { WhatsappModule } from './whatsapp';
 
 @Module({
@@ -22,6 +23,7 @@ import { WhatsappModule } from './whatsapp';
     AuthModule,
     ContactsModule,
     CampaignsModule,
+    LeadsModule,
     WhatsappModule,
     AiModule,
     GmailModule,
