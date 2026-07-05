@@ -1,0 +1,14 @@
+{
+  "name": "growthlab",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "dev:backend": "npm run start:dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "lint:frontend": "npm run lint --prefix frontend",
+    "prisma:generate": "npm run prisma:generate --prefix backend"
+  }
+}

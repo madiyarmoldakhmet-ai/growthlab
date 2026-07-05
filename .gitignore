@@ -37,12 +37,6 @@ Thumbs.db
 .vscode/
 .aider*
 
-# Nested duplicate project copies (do not track)
-growthlab/
-growthlab 2/
-backend/GrowthLab 2/
-growthlab_backup.zip
-
 # Build artifacts
 *.tsbuildinfo
 *.log
