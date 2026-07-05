@@ -3,17 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { configuration } from './config/configuration';
 import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './prisma.module';
-import { AiModule } from './ai';
-import { AuthModule } from './auth';
-import { CampaignsModule } from './campaigns/campaigns.module';
-import { ChannelsModule } from './channels/channels.module';
-import { ContactsModule } from './contacts/contacts.module';
-import { GmailModule } from './gmail';
-import { LeadsModule } from './leads/leads.module';
-import { PersonalizationModule } from './personalization/personalization.module';
-import { SendingModule } from './sending/sending.module';
-import { VerificationModule } from './verification/verification.module';
-import { WhatsappModule } from './whatsapp';
+import { CleanMvpModule } from './clean-mvp/clean-mvp.module';
+import { EmailWorkerModule } from './email-worker/email-worker.module';
+import { NodemailerTransporterService } from './common/nodemailer-transporter.service';
 
 @Module({
   imports: [
@@ -24,17 +16,9 @@ import { WhatsappModule } from './whatsapp';
       validate: validateEnv,
     }),
     PrismaModule,
-    AuthModule,
-    ContactsModule,
-    CampaignsModule,
-    LeadsModule,
-    VerificationModule,
-    PersonalizationModule,
-    ChannelsModule,
-    SendingModule,
-    WhatsappModule,
-    AiModule,
-    GmailModule,
+    CleanMvpModule,
+    EmailWorkerModule,
   ],
+  providers: [NodemailerTransporterService],
 })
 export class AppModule {}

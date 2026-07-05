@@ -1,7 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import multipart from '@fastify/multipart';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -21,12 +20,6 @@ async function bootstrap() {
       ? corsOrigin.split(',').map((origin) => origin.trim())
       : true,
     credentials: true,
-  });
-
-  await app.register(multipart, {
-    limits: {
-      fileSize: config.get('uploadMaxBytes', { infer: true }),
-    },
   });
 
   app.useGlobalPipes(

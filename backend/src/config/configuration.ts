@@ -1,67 +1,42 @@
 /**
  * Typed configuration factory consumed by ConfigService.
- * Access nested values with a dot path, e.g. config.get('jwt.secret', { infer: true }).
  */
-const DEFAULT_PERSONALIZATION_PROMPT = [
-  'Ты пишешь короткие холодные B2B-письма на русском языке для рынка СНГ.',
-  'Письмо должно быть персональным (используй имя, компанию, должность лида, если есть),',
-  'по делу, без воды, без давления и без спам-клише. Один понятный следующий шаг (CTA).',
-  'НЕ выдумывай факты о компании лида. НЕ добавляй подпись/футер — его добавит система.',
-  'Верни строго JSON: {"subject":"...","body":"...","followUp":"..."},',
-  'где followUp — короткое письмо-напоминание на случай отсутствия ответа.',
-].join(' ');
-
 export const configuration = () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '3001', 10),
   corsOrigin: process.env.CORS_ORIGIN,
   appPublicUrl: process.env.APP_PUBLIC_URL ?? 'http://localhost:3001',
-  uploadMaxBytes: parseInt(
-    process.env.UPLOAD_MAX_BYTES ?? String(5 * 1024 * 1024),
-    10,
-  ),
   database: {
     url: process.env.DATABASE_URL,
   },
-  jwt: {
-    secret: process.env.JWT_SECRET ?? 'change-me',
-    expiresInSeconds: parseInt(process.env.JWT_EXPIRES_IN_SECONDS ?? '86400', 10),
+  smtp: {
+    host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT ?? '465', 10),
+    user: process.env.SMTP_USER ?? '',
+    pass: process.env.SMTP_PASS ?? '',
+    fromName: process.env.SMTP_FROM_NAME ?? process.env.SENDER_NAME ?? 'GrowthLab',
+    configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
   },
-  admin: {
-    email: process.env.ADMIN_EMAIL ?? 'admin@growthlab.local',
-    password: process.env.ADMIN_PASSWORD ?? 'admin',
-  },
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY ?? '',
-    model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-    baseUrl: process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
-  },
-  apollo: {
-    apiKey: process.env.APOLLO_API_KEY ?? '',
-    baseUrl: process.env.APOLLO_BASE_URL ?? 'https://api.apollo.io',
-  },
-  zerobounce: {
-    apiKey: process.env.ZEROBOUNCE_API_KEY ?? '',
-    baseUrl: process.env.ZEROBOUNCE_BASE_URL ?? 'https://api.zerobounce.net/v2',
-  },
-  sending: {
-    // SAFETY: dry-run is the default. Emails are NOT sent until DRY_RUN=false is set explicitly.
-    dryRun: (process.env.DRY_RUN ?? 'true') !== 'false',
-    throttleMs: parseInt(process.env.SEND_THROTTLE_MS ?? '1000', 10),
-    defaultDailyLimit: parseInt(process.env.MAILBOX_DAILY_LIMIT ?? '50', 10),
-    // Shared secret required on inbound provider webhooks (x-webhook-secret header).
-    webhookSecret: process.env.WEBHOOK_SECRET ?? '',
-  },
-  personalization: {
-    // Prompt + tone/offer live in config so they can be tuned without code changes.
-    systemPrompt: process.env.PERSONALIZATION_SYSTEM_PROMPT || DEFAULT_PERSONALIZATION_PROMPT,
-    product: process.env.PERSONALIZATION_PRODUCT ?? 'наш сервис',
-    tone: process.env.PERSONALIZATION_TONE ?? 'деловой, живой, без давления',
-    maxBodyLength: parseInt(process.env.PERSONALIZATION_MAX_BODY_LENGTH ?? '900', 10),
-    generateFollowUp: (process.env.PERSONALIZATION_FOLLOWUP ?? 'true') !== 'false',
-    senderName: process.env.SENDER_NAME ?? '',
-    senderCompany: process.env.SENDER_COMPANY ?? 'GrowLab',
-    senderAddress: process.env.SENDER_ADDRESS ?? '',
+  instagram: {
+    // Сессии Puppeteer запускаются с этими учетками (через login form).
+    accounts: [
+      { username: process.env.IG_USER_1 ?? '', password: process.env.IG_PASS_1 ?? '' },
+      { username: process.env.IG_USER_2 ?? '', password: process.env.IG_PASS_2 ?? '' },
+    ].filter((a) => a.username && a.password),
+    // Пауза между отправками в массовой рассылке, мс.
+    sendIntervalMs: (parseInt(process.env.IG_SEND_INTERVAL_SECONDS ?? '60', 10) || 60) * 1000,
+
+    // ─── Webhook (Meta) ────────────────────────────────────────────
+    // Verify Token: придумайте строку и впишите её же в панели Meta.
+    webhookVerifyToken: process.env.IG_WEBHOOK_VERIFY_TOKEN ?? '',
+    // Page/Instagram Access Token для отправки ответов через Graph API.
+    webhookPageAccessToken: process.env.IG_WEBHOOK_PAGE_ACCESS_TOKEN ?? '',
+    // Ключ OpenAI (опционально). Если пусто — бот отвечает заглушкой.
+    openAiApiKey: process.env.OPENAI_API_KEY ?? '',
+    // Версия Graph API (v21.0 актуальна на 2025).
+    graphApiVersion: process.env.IG_GRAPH_API_VERSION ?? 'v21.0',
+    // Разрешить эхо-ответ при отсутствии OpenAI (для отладки).
+    webhookFallbackEcho: process.env.IG_WEBHOOK_FALLBACK_ECHO === 'true',
   },
 });
 

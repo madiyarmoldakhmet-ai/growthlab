@@ -5,7 +5,6 @@ import {
   IsOptional,
   IsString,
   Min,
-  MinLength,
   validateSync,
 } from 'class-validator';
 
@@ -33,32 +32,49 @@ export class EnvironmentVariables {
   @IsString()
   DATABASE_URL!: string;
 
-  @IsString()
-  @MinLength(16, { message: 'JWT_SECRET must be at least 16 characters' })
-  JWT_SECRET!: string;
-
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  JWT_EXPIRES_IN_SECONDS = 86400;
-
   @IsString()
-  ADMIN_EMAIL!: string;
+  DIRECT_URL?: string;
 
-  @IsString()
-  ADMIN_PASSWORD!: string;
-
-  // Optional integrations — features degrade gracefully when missing.
   @IsOptional()
   @IsString()
   CORS_ORIGIN?: string;
 
   @IsOptional()
+  @IsString()
+  APP_PUBLIC_URL?: string;
+
+  // ─── SMTP (outbound email transport) ─────────────────────────
+  @IsOptional()
+  @IsString()
+  SMTP_HOST?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+  SMTP_PORT?: number;
+
+  @IsOptional()
+  @IsString()
+  SMTP_USER?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_PASS?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_FROM_NAME?: string;
+
+  // ─── Instagram Webhook (Meta) ───────────────────────────────
+  @IsOptional()
+  @IsString()
+  IG_WEBHOOK_VERIFY_TOKEN?: string;
+
+  @IsOptional()
+  @IsString()
+  IG_WEBHOOK_PAGE_ACCESS_TOKEN?: string;
 
   @IsOptional()
   @IsString()
@@ -66,85 +82,11 @@ export class EnvironmentVariables {
 
   @IsOptional()
   @IsString()
-  OPENAI_MODEL?: string;
+  IG_GRAPH_API_VERSION?: string;
 
   @IsOptional()
   @IsString()
-  OPENAI_BASE_URL?: string;
-
-  @IsOptional()
-  @IsString()
-  APOLLO_API_KEY?: string;
-
-  @IsOptional()
-  @IsString()
-  APOLLO_BASE_URL?: string;
-
-  @IsOptional()
-  @IsString()
-  ZEROBOUNCE_API_KEY?: string;
-
-  @IsOptional()
-  @IsString()
-  ZEROBOUNCE_BASE_URL?: string;
-
-  @IsOptional()
-  @IsString()
-  APP_PUBLIC_URL?: string;
-
-  @IsOptional()
-  @IsString()
-  PERSONALIZATION_SYSTEM_PROMPT?: string;
-
-  @IsOptional()
-  @IsString()
-  PERSONALIZATION_PRODUCT?: string;
-
-  @IsOptional()
-  @IsString()
-  PERSONALIZATION_TONE?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(100)
-  PERSONALIZATION_MAX_BODY_LENGTH?: number;
-
-  @IsOptional()
-  @IsString()
-  PERSONALIZATION_FOLLOWUP?: string;
-
-  @IsOptional()
-  @IsString()
-  SENDER_NAME?: string;
-
-  @IsOptional()
-  @IsString()
-  SENDER_COMPANY?: string;
-
-  @IsOptional()
-  @IsString()
-  SENDER_ADDRESS?: string;
-
-  @IsOptional()
-  @IsString()
-  DRY_RUN?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  SEND_THROTTLE_MS?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  MAILBOX_DAILY_LIMIT?: number;
-
-  @IsOptional()
-  @IsString()
-  WEBHOOK_SECRET?: string;
+  IG_WEBHOOK_FALLBACK_ECHO?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

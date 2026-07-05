@@ -9,8 +9,13 @@ type Phase = "loading" | "ready";
 interface MockScreenProps<T> {
   title: string;
   subtitle?: string;
-  /** Returns the mock rows. Swap this for a real API fetch later. */
-  load: () => T[];
+  /**
+   * Returns the rows to render. May be sync (mock) or async (real API fetch).
+   * Swap the implementation from mock to a real fetch without touching the UI.
+   * When the path option is provided, the screen will fetch from the backend
+   * (and silently fall back to `fallback` on network error so the screen never breaks).
+   */
+  load: () => T[] | Promise<T[]>;
   emptyText?: string;
   errorText?: string;
   /** Optional header action (e.g. a "+ create" button). */
@@ -37,12 +42,28 @@ export function MockScreen<T>({
   const [data, setData] = useState<T[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
     setPhase("loading");
-    const id = setTimeout(() => {
-      setData(mode === "data" ? load() : []);
-      setPhase("ready");
-    }, 450);
-    return () => clearTimeout(id);
+    const result = mode === "data" ? load() : [];
+
+    // Sync path (mock) and async path (real fetch) share the same setter.
+    Promise.resolve(result)
+      .then((rows) => {
+        if (!cancelled) {
+          setData(rows);
+          setPhase("ready");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setData([]);
+          setPhase("ready");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
     // load is stable per screen; re-run only when the demo mode changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
