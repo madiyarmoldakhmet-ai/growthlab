@@ -1,0 +1,484 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ─────────────────────────────────────────────
+enum UserRole {
+  admin
+  member
+}
+
+enum CampaignStatus {
+  draft
+  active
+  paused
+  completed
+  archived
+}
+
+enum MessageStatus {
+  queued
+  scheduled
+  sending
+  sent
+  delivered
+  failed
+  bounced
+}
+
+enum ChannelType {
+  email
+  telegram
+  whatsapp
+  sms
+}
+
+enum ContactSource {
+  apollo
+  csv
+  manual
+  referral
+  other
+}
+
+enum ContactStatus {
+  new
+  verifying
+  ready
+  queued
+  contacted
+  replied
+  won
+  lost
+  suppressed
+}
+
+enum VerificationStatus {
+  unverified
+  valid
+  invalid
+  risky
+  catch_all
+  unknown
+}
+
+// Funnel + audit event types. Core funnel stages: sent → delivered → opened →
+// replied → positive → demo → won. Bounce is split so suppression only fires on hard.
+enum EventType {
+  queued
+  sent
+  delivered
+  opened
+  clicked
+  replied
+  positive
+  negative
+  demo
+  won
+  lost
+  hard_bounced
+  soft_bounced
+  complained
+  unsubscribed
+  failed
+}
+
+enum ResponseSentiment {
+  positive
+  negative
+  neutral
+  auto_reply
+}
+
+enum CampaignContactStatus {
+  active
+  excluded
+  completed
+  bounced
+}
+
+enum SuppressionReason {
+  unsubscribe
+  hard_bounce
+  complaint
+  manual
+  invalid
+}
+
+enum ConsentStatus {
+  granted
+  revoked
+}
+
+// ─── Models ────────────────────────────────────────────
+model Organization {
+  id             String             @id @default(uuid()) @db.Uuid
+  name           String
+  users          User[]
+  // CrmContact[] — manual/CRM contacts (legacy entity, Gmail channel).
+  crmContacts    CrmContact[]
+  // Contact[] — cold-outreach prospects.
+  contacts       Contact[]
+  campaigns      Campaign[]
+  sendingAccounts SendingAccount[]
+  messages       Message[]
+  responses      Response[]
+  events         Event[]
+  settings       Setting[]
+  suppressions   SuppressionEntry[]
+  consents       Consent[]
+  aiRequests     AiRequest[]
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  @@map("organizations")
+}
+
+model User {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Global unique: email is the cross-org login identity (lookup before org is known).
+  email          String       @unique
+  passwordHash   String       @map("password_hash")
+  name           String?
+  role           UserRole     @default(member)
+  crmContacts    CrmContact[]
+  campaigns      Campaign[]
+  messages       Message[]
+  settings       Setting[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+// Manual/CRM contact (legacy entity, used by the crm-contacts module + Gmail channel).
+model CrmContact {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String       @map("user_id") @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email          String?
+  phone          String?
+  firstName      String?      @map("first_name")
+  lastName       String?      @map("last_name")
+  company        String?
+  metadata       Json?
+  messages       Message[]
+  responses      Response[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([organizationId, email])
+  @@index([userId])
+  @@map("crm_contacts")
+}
+
+// Cold-outreach prospect: discovered (autoresearch/CSV), verified, then messaged.
+// Email normalization (trim+lowercase) is a service-layer contract; emailless contacts
+// are intentionally not deduped by the unique below (phone dedup handled in Ф2).
+model Contact {
+  id                 String             @id @default(uuid()) @db.Uuid
+  organizationId     String             @map("organization_id") @db.Uuid
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email              String?
+  phone              String?
+  firstName          String?            @map("first_name")
+  lastName           String?            @map("last_name")
+  company            String?
+  position           String?
+  source             ContactSource      @default(manual)
+  status             ContactStatus      @default(new)
+  verificationStatus VerificationStatus @default(unverified) @map("verification_status")
+  verifiedAt         DateTime?          @map("verified_at")
+  demoAt             DateTime?          @map("demo_at")
+  wonAt              DateTime?          @map("won_at")
+  lostAt             DateTime?          @map("lost_at")
+  metadata           Json?
+  campaignContacts   CampaignContact[]
+  messages           Message[]
+  responses          Response[]
+  events             Event[]
+  consents           Consent[]
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  @@unique([organizationId, email])
+  @@index([organizationId, status])
+  @@index([organizationId, verificationStatus])
+  @@map("contacts")
+}
+
+// A sending identity: an email mailbox, a Telegram bot, etc. Secrets stay in env;
+// `config` holds only non-secret settings. Powers rotation + daily limits (Ф5).
+model SendingAccount {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type           ChannelType
+  name           String
+  identifier     String?
+  config         Json?
+  dailyLimit     Int          @default(50) @map("daily_limit")
+  isActive       Boolean      @default(true) @map("is_active")
+  messages       Message[]
+  campaigns      Campaign[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([organizationId, type])
+  @@map("sending_accounts")
+}
+
+model Campaign {
+  id              String         @id @default(uuid()) @db.Uuid
+  organizationId  String         @map("organization_id") @db.Uuid
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String         @map("user_id") @db.Uuid
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  goal            String?
+  channel         ChannelType?
+  sendingAccountId String?       @map("sending_account_id") @db.Uuid
+  sendingAccount  SendingAccount? @relation(fields: [sendingAccountId], references: [id], onDelete: SetNull)
+  audience        Json?
+  status          CampaignStatus @default(draft)
+  startsAt        DateTime?      @map("starts_at")
+  endsAt          DateTime?      @map("ends_at")
+  campaignContacts CampaignContact[]
+  messages        Message[]
+  responses       Response[]
+  events          Event[]
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@index([organizationId, status])
+  @@index([userId])
+  @@map("campaigns")
+}
+
+// Explicit campaign audience membership (campaign_contacts equivalent).
+// organizationId denormalized for tenant-scoped queries; same-tenant integrity
+// (campaign.org == contact.org) is enforced in the service layer.
+model CampaignContact {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  campaignId     String             @map("campaign_id") @db.Uuid
+  campaign       Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId      String             @map("contact_id") @db.Uuid
+  contact        Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status         CampaignContactStatus @default(active)
+  addedAt        DateTime           @default(now()) @map("added_at")
+  removedAt      DateTime?          @map("removed_at")
+
+  @@unique([campaignId, contactId])
+  @@index([organizationId])
+  @@index([campaignId])
+  @@index([contactId])
+  @@map("campaign_contacts")
+}
+
+model Message {
+  id                String        @id @default(uuid()) @db.Uuid
+  organizationId    String        @map("organization_id") @db.Uuid
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId            String?       @map("user_id") @db.Uuid
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  campaignId        String?       @map("campaign_id") @db.Uuid
+  campaign          Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  crmContactId      String?       @map("crm_contact_id") @db.Uuid
+  crmContact        CrmContact?   @relation(fields: [crmContactId], references: [id], onDelete: SetNull)
+  contactId         String?       @map("contact_id") @db.Uuid
+  contact           Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  sendingAccountId  String?       @map("sending_account_id") @db.Uuid
+  sendingAccount    SendingAccount? @relation(fields: [sendingAccountId], references: [id], onDelete: SetNull)
+  channel           String
+  // Sequence step within a campaign. Audience-level idempotency: a contact is sent a
+  // given step at most once (see @@unique below). Default 0 for manual messages.
+  step              Int           @default(0)
+  subject           String?
+  body              String
+  status            MessageStatus @default(queued)
+  // Per-attempt idempotency: a repeated send job with the same key must not duplicate.
+  // The sending pipeline always sets it; nullable for manual/legacy (e.g. Gmail) sends.
+  idempotencyKey    String?       @map("idempotency_key")
+  provider          String?
+  providerMessageId String?       @map("provider_message_id")
+  unsubscribeToken  String?       @unique @map("unsubscribe_token")
+  failureReason     String?       @map("failure_reason")
+  scheduledAt       DateTime?     @map("scheduled_at")
+  sentAt            DateTime?     @map("sent_at")
+  deliveredAt       DateTime?     @map("delivered_at")
+  openedAt          DateTime?     @map("opened_at")
+  repliedAt         DateTime?     @map("replied_at")
+  bouncedAt         DateTime?     @map("bounced_at")
+  failedAt          DateTime?     @map("failed_at")
+  // Generation metadata: follow-up draft, quality flags, model, fallback flag.
+  metadata          Json?
+  responses         Response[]
+  events            Event[]
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([provider, providerMessageId])
+  @@unique([campaignId, contactId, step])
+  @@index([organizationId, status, scheduledAt])
+  @@index([campaignId])
+  @@index([crmContactId])
+  @@index([contactId])
+  @@index([sendingAccountId])
+  @@map("messages")
+}
+
+model Response {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messageId      String             @map("message_id") @db.Uuid
+  message        Message            @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  crmContactId   String?            @map("crm_contact_id") @db.Uuid
+  crmContact     CrmContact?        @relation(fields: [crmContactId], references: [id], onDelete: SetNull)
+  contactId      String?            @map("contact_id") @db.Uuid
+  contact        Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaignId     String?            @map("campaign_id") @db.Uuid
+  campaign       Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  body           String
+  // AI classification of the reply (the replied → positive funnel split lives here).
+  sentiment      ResponseSentiment?
+  aiScore        Int?               @map("ai_score")
+  aiCategory     String?            @map("ai_category")
+  aiEvaluatedAt  DateTime?          @map("ai_evaluated_at")
+  metadata       Json?
+  receivedAt     DateTime           @default(now()) @map("received_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@index([messageId])
+  @@index([crmContactId])
+  @@index([contactId])
+  @@index([campaignId])
+  @@map("responses")
+}
+
+// Append-only funnel + audit log. One row per lifecycle/funnel event.
+// Provider webhooks are at-least-once: the @@unique on providerEventId makes
+// ingestion idempotent (internal events keep providerEventId NULL = distinct).
+model Event {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type            EventType
+  channelType     ChannelType? @map("channel_type")
+  messageId       String?      @map("message_id") @db.Uuid
+  message         Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  contactId       String?      @map("contact_id") @db.Uuid
+  contact         Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaignId      String?      @map("campaign_id") @db.Uuid
+  campaign        Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  provider        String?
+  providerEventId String?      @map("provider_event_id")
+  metadata        Json?
+  occurredAt      DateTime     @default(now()) @map("occurred_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@unique([organizationId, provider, providerEventId])
+  @@index([organizationId, occurredAt])
+  @@index([campaignId, type, occurredAt])
+  @@index([contactId])
+  @@index([messageId])
+  @@map("events")
+}
+
+model Setting {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Optional author of the setting. Uniqueness is org-level: settings are org-scoped.
+  userId         String?      @map("user_id") @db.Uuid
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  key            String
+  value          Json
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([organizationId, key])
+  @@index([key])
+  @@map("settings")
+}
+
+// Suppression list: addresses we must never contact. Channel-agnostic `address`
+// (normalized email or phone/handle). The pre-send gate checks this per recipient.
+model SuppressionEntry {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channelType    ChannelType       @default(email) @map("channel_type")
+  address        String
+  reason         SuppressionReason
+  // Provenance for reconciliation (which contact/message/event caused the suppression).
+  source         String?
+  contactId      String?           @map("contact_id") @db.Uuid
+  messageId      String?           @map("message_id") @db.Uuid
+  metadata       Json?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  @@unique([organizationId, channelType, address])
+  @@index([organizationId, address])
+  @@map("suppressions")
+}
+
+// Audit + COGS source for every LLM call (token spend feeds Ф7 analytics).
+// contactId/messageId are provenance-only scalars (no FK) to keep the log lightweight.
+model AiRequest {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  operation        String
+  provider         String
+  model            String
+  status           String       @default("success")
+  promptTokens     Int          @default(0) @map("prompt_tokens")
+  completionTokens Int          @default(0) @map("completion_tokens")
+  totalTokens      Int          @default(0) @map("total_tokens")
+  contactId        String?      @map("contact_id") @db.Uuid
+  messageId        String?      @map("message_id") @db.Uuid
+  error            String?
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@index([operation])
+  @@map("ai_requests")
+}
+
+// Positive opt-in record, required before contacting non-email channels (TG/WhatsApp).
+model Consent {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contactId      String?       @map("contact_id") @db.Uuid
+  contact        Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  channelType    ChannelType   @map("channel_type")
+  address        String
+  status         ConsentStatus @default(granted)
+  source         String?
+  grantedAt      DateTime?     @map("granted_at")
+  revokedAt      DateTime?     @map("revoked_at")
+  metadata       Json?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@unique([organizationId, channelType, address])
+  @@index([organizationId])
+  @@map("consents")
+}
