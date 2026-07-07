@@ -6,10 +6,12 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 
 # Environment and secrets
 .env
 .env.*
+.env.local
 !.env.example
 
 # Google / OAuth credential files (NEVER commit)
@@ -18,6 +20,12 @@ coverage/
 *.pem
 gcp-*.json
 service-account*.json
+
+# Auth tokens / API keys / cookies (NEVER commit)
+*.token
+*.tokens
+*cookies*.json
+cookies.txt
 
 # Business pitch (financials) — keep out of git while repo is public.
 # Remove this line if the repo becomes private and you want the pitch tracked.
@@ -35,8 +43,19 @@ pnpm-debug.log*
 Thumbs.db
 .idea/
 .vscode/
-.aider*
+*.local
 
-# Build artifacts
-*.tsbuildinfo
-*.log
+# AI assistants / local agent caches (keep private, never commit)
+.aider*
+.claude/
+.claude-*
+.cursor/
+.windsurf/
+.continue/
+.codeium/
+.copilot/
+.tabnine/
+.aider.conf.yml
+.aider.model.settings.yml
+.aider.chat.history.md
+aider.conf.yml
